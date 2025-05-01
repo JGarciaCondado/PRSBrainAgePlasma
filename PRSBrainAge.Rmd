@@ -14,7 +14,7 @@ knit: (
 ---
 
 ```{r, include = FALSE, warning = FALSE, message = FALSE}
-library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(nlme)
+library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(nlme);library(gridExtra);library(effsize)
 
 
 knitr::opts_chunk$set(echo = FALSE, message = FALSE)
@@ -26,41 +26,71 @@ theme_set(theme_bw())
 ```{r, include = FALSE}
 
 # Load PRS
-prs_A4 <- read.csv('~/Documents/Projects/AgingBrainStudy/data/A4/processed/prs_0.5.csv')
+threshold = 0.5
+prs_gm <- read.table(sprintf('~/Documents/Projects/PRSBrainAgePlasma/data/prs_scores/gm/prs2.pT%s.sscore', threshold), 
+                     header = FALSE, 
+                     row.names = 1,
+                     sep = '\t') %>%
+          dplyr::select(V2, V5) %>%
+          rename(BID = V2,GM_SCORE= V5)
+prs_wm <- read.table(sprintf('~/Documents/Projects/PRSBrainAgePlasma/data/prs_scores/wm/prs2.pT%s.sscore', threshold), 
+                     header = FALSE, 
+                     row.names = 1,
+                     sep = '\t') %>%
+          dplyr::select(V2, V5) %>%
+          rename(BID = V2, WM_SCORE= V5)
+prs_fc <- read.table(sprintf('~/Documents/Projects/PRSBrainAgePlasma/data/prs_scores/fc/prs2.pT%s.sscore', threshold), 
+                     header = FALSE, 
+                     row.names = 1,
+                     sep = '\t') %>%
+          dplyr::select(V2, V5) %>%
+          rename(BID = V2, FC_SCORE= V5)
 
-# Load factors
-factors <- read.csv('~/Documents/Projects/AgingBrainStudy/data/A4/processed/factors.csv', na.strings = c("", " ", "NaN", "NA", NA))
-data <- merge(prs_A4, factors, by = 'BID', all.x = TRUE)
+# Merge PRS
+prs <- merge(prs_gm, prs_wm, by = 'BID')
+prs <- merge(prs, prs_fc, by = 'BID')
 
-# Amyloid status
-covars <- read.csv('~/Documents/Projects/AgingBrainStudy/data/A4/processed/covariates.csv', na.strings = c("", " ", "NaN", "NA", NA))
-covars$Amyloid <- ifelse(covars$Amyloid == 1, 'positive', 'negative')
-covars$e4 <- ifelse(covars$e4 == 1, 'carrier', 'non-carrier')
-data <- merge(data, covars[, c('BID', 'Amyloid', 'e4')], by = 'BID', all.x = TRUE)
+# Z-score PRS
+prs$GM_ZSCORE <- (prs$GM_SCORE - mean(prs$GM_SCORE, na.rm = TRUE)) / sd(prs$GM_SCORE, na.rm = TRUE)
+prs$WM_ZSCORE <- (prs$WM_SCORE - mean(prs$WM_SCORE, na.rm = TRUE)) / sd(prs$WM_SCORE, na.rm = TRUE)
+prs$FC_ZSCORE <- (prs$FC_SCORE - mean(prs$FC_SCORE, na.rm = TRUE)) / sd(prs$FC_SCORE, na.rm = TRUE)
 
-# Demographics
-demographics <- read.csv('~/Documents/Projects/AgingBrainStudy/data/A4/raw/SUBJINFO.csv')
-demographics <- demographics %>%
-  rename(YearsEd = EDCCNTU) %>%
-  rename(age = AGEYR) %>%
-  mutate(SEX = recode(SEX, `1` = "Female", `2` = "Male"))
-data <- merge(data, demographics, by = 'BID', all.x = TRUE)
+# Load data
+data <- read.csv('~/Documents/Projects/PRSBrainAgePlasma/data/a4_baseline_plasma/a4_plasma_05012025_full.csv', 
+                 row.names=1)  %>%
+        dplyr::select(BID, Sex, Baseline_Age, Education, apoe_genotype, Amyloid_Status, PTAU217, AMYLB42, NF.L., GFAP.) %>%
+        rename(age = Baseline_Age, YearsEd = Education, Amyloid = Amyloid_Status, pTau217 = PTAU217, AB42 = AMYLB42, NF.L = NF.L., GFAP = GFAP.) %>%
+        mutate(Sex = recode(Sex, `1` = "Female", `0` = "Male"),
+               Sex = as.factor(Sex),
+               Amyloid = as.factor(Amyloid))
 
-# Tertiles
-data$GM_tertiles <- cut(data$GM_ZSCORE, 
-                       breaks = quantile(data$GM_ZSCORE, probs = c(0, 1/3, 2/3, 1), na.rm = TRUE),
-                       labels = c("1st", "2nd", "3rd"),
-                       include.lowest = TRUE)
+# Filter value reads of PTau217
+data$pTau217[data$pTau217 == "<LLOQ" | data$pTau217 == ">ULOQ"] <- NA
+data$pTau217 <- as.numeric(data$pTau217)
+data$NF.L <- as.numeric(data$NF.L)
+
+# For numbering puprose
+data$ptau_n <- ifelse(!is.na(data$pTau217), 1, 0)
+data$NF.L_n <- ifelse(!is.na(data$NF.L), 1, 0)
+data$GFAP_n <- ifelse(!is.na(data$GFAP), 1, 0)
+data$AB42_n <- ifelse(!is.na(data$AB42), 1, 0)
+
+# APOE e4 status
+data$e4 <- ifelse(grepl("e4", data$apoe_genotype), "e4+", "e4-")
+data$e4 <- as.factor(data$e4)
+
+# Merge PRS
+data <- merge(data, prs, by = 'BID')
 ```
 
 Cohort Demographics
 
 ```{r}
 table <- tbl_summary(data,
-            include = c(age, SEX, YearsEd, e4, Amyloid, pTau217, NF.L, GFAP),
+            include = c(age, Sex, YearsEd, e4, Amyloid, ptau_n, pTau217, AB42_n, AB42, NF.L_n, NF.L, GFAP_n, GFAP),
             missing = "no",
             statistic = list(all_continuous()  ~ c("{mean} ({sd})")),
-            label = list(age ~ "Age", YearsEd ~ "Education (Years)", NF.L ~ "NFL (pg/mL)", GFAP ~ "GFAP (ng/mL)", pTau217 ~ "pTau 217 (U/mL)"),
+            label = list(age ~ "Age", YearsEd ~ "Education (Years)", NF.L ~ "NFL (pg/mL)", GFAP ~ "GFAP (ng/mL)", pTau217 ~ "pTau 217 (U/mL)", AB42 ~ "AB42 (pg/mL)"),
             digits = list(all_continuous() ~ 2, all_categorical() ~ c(0,2)),
             by = Amyloid) %>%
   modify_header(stat_1 = "**AB-**, N = {n}", stat_2 = "**AB+**, N = {n}") %>%
@@ -73,282 +103,391 @@ table %>%
   fontsize(size = 12, part = "all") %>%
   line_spacing(space = 1.5, part = "all") %>%
   autofit() %>%
-  save_as_docx(path = "~/Downloads/DemographicsTable.docx")
+  save_as_docx(path = "~/Documents/Projects/PRSBrainAgePlasma/figures/Cohort_Demographics.docx")
 
 table
 
 ```
 
-## Division by SEX {.tabset}
+Distribution of PRS Z-scores
 
-### GM
+```{r}
+# Plot three histograms of PRS in a grid
+h_gm <- ggplot(data, aes(x = GM_ZSCORE)) +
+  geom_histogram(binwidth = 0.5, fill = "blue", color = "black", alpha = 0.7) +
+  labs(title = "GM PRS", x = "GM PRS Z-score", y = "Count") +
+  theme_minimal()
+h_wm <- ggplot(data, aes(x = WM_ZSCORE)) +
+  geom_histogram(binwidth = 0.5, fill = "red", color = "black", alpha = 0.7) +
+  labs(title = "WM PRS", x = "WM PRS Z-score", y = "Count") +
+  theme_minimal()
+h_fc <- ggplot(data, aes(x = FC_ZSCORE)) +
+  geom_histogram(binwidth = 0.5, fill = "green", color = "black", alpha = 0.7) +
+  labs(title = "FC PRS", x = "FC PRS Zscore", y = "Count") +
+  theme_minimal()
+grid.arrange(h_gm, h_wm, h_fc, ncol = 3)
+```
+
+# Group analysis {.tabset}
+
+## SEX {.tabset}
 
 ```{r}
 # Create a bloxpot groupbing by SEX
-ggplot(subset(data, !is.na(SEX)), aes(x = SEX, y = GM_ZSCORE)) +
+sex_gm <- ggplot(subset(data, !is.na(Sex)), aes(x = Sex, y = GM_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by SEX',
+  labs(title = 'WM PRS',
        x = 'SEX',
        y = 'PRS Zscore')
-```
-### WM
 
-```{r}
 # Create a bloxpot groupbing by SEX
-ggplot(subset(data, !is.na(SEX)), aes(x = SEX, y = WM_ZSCORE)) +
+sex_wm <- ggplot(subset(data, !is.na(Sex)), aes(x = Sex, y = WM_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by SEX',
+  labs(title = 'GM PRS',
        x = 'SEX',
        y = 'PRS Zscore')
-```
 
-### FC
-
-```{r}
 # Create a bloxpot groupbing by SEX
-ggplot(subset(data, !is.na(SEX)), aes(x = SEX, y = FC_ZSCORE)) +
+sex_fc <- ggplot(subset(data, !is.na(Sex)), aes(x = Sex, y = FC_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by SEX',
+  labs(title = 'FC PRS',
        x = 'SEX',
        y = 'PRS Zscore')
+
+# Arrange the plots in a grid
+grid.arrange(sex_gm, sex_wm, sex_fc, ncol = 3)
 ```
 
-## Division by E4 Status {.tabset}
-
-### GM
+## E4 Status
 
 ```{r}
 # Create a boxplot grouping by E4 status
-ggplot(subset(data, !is.na(e4)), aes(x = e4, y = GM_ZSCORE)) +
+e4_gm <- ggplot(subset(data, !is.na(e4)), aes(x = e4, y = GM_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by E4 status',
+  labs(title = 'GM PRS',
        x = 'E4 status',
        y = 'PRS Zscore')
 
-```
-
-### WM
-
-```{r}
 # Create a boxplot grouping by E4 status
-ggplot(subset(data, !is.na(e4)), aes(x = e4, y = WM_ZSCORE)) +
+e4_wm <- ggplot(subset(data, !is.na(e4)), aes(x = e4, y = WM_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by E4 status',
+  labs(title = 'WM PRS',
        x = 'E4 status',
        y = 'PRS Zscore')
-```
 
-### FC
-
-```{r}
 # Create a boxplot grouping by E4 status
-ggplot(subset(data, !is.na(e4)), aes(x = e4, y = FC_ZSCORE)) +
+e4_fc <- ggplot(subset(data, !is.na(e4)), aes(x = e4, y = FC_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by E4 status',
+  labs(title = 'FC PRS',
        x = 'E4 status',
        y = 'PRS Zscore')
+
+# Arrange the plots in a grid
+grid.arrange(e4_gm, e4_wm, e4_fc, ncol = 3)
 ```
 
-## Division by Amyloid Status {.tabset}
-
-### GM
+## Amyloid Status
 
 ```{r}
 # Create a boxplot grouping by Amyloid status
 
-ggplot(subset(data, !is.na(Amyloid)), aes(x = Amyloid, y = GM_ZSCORE)) +
+ab_gm <- ggplot(subset(data, !is.na(Amyloid)), aes(x = Amyloid, y = GM_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by Amyloid status',
+  labs(title = 'GM PRS',
        x = 'Amyloid status',
        y = 'PRS Zscore')
-```
 
-### WM
-
-```{r}
 # Create a boxplot grouping by Amyloid status
-ggplot(subset(data, !is.na(Amyloid)), aes(x = Amyloid, y = WM_ZSCORE)) +
+ab_wm <- ggplot(subset(data, !is.na(Amyloid)), aes(x = Amyloid, y = WM_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by Amyloid status',
+  labs(title = 'WM PRS',
        x = 'Amyloid status',
        y = 'PRS Zscore')
-```
 
-### FC
-
-```{r}
 # Create a boxplot grouping by Amyloid status
-ggplot(subset(data, !is.na(Amyloid)), aes(x = Amyloid, y = FC_ZSCORE)) +
+ab_fc <- ggplot(subset(data, !is.na(Amyloid)), aes(x = Amyloid, y = FC_ZSCORE)) +
   geom_boxplot() +
   stat_compare_means(method = 't.test') +
-  labs(title = 'PRS Zscore by Amyloid status',
+  labs(title = 'FC PRS',
        x = 'Amyloid status',
        y = 'PRS Zscore')
+
+# Arrange the plots in a grid
+grid.arrange(ab_gm, ab_wm, ab_fc, ncol = 3)
 ```
 
-## Division by Age {.tabset}
-
-### GM
+##Age
 
 ``` {r}
 # Create a scatter plot of PRS Zscore by Age
-ggplot(subset(data, !is.na(age)), aes(x = age, y = GM_ZSCORE)) +
+age_gm <- ggplot(subset(data, !is.na(age)), aes(x = age, y = GM_ZSCORE)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ x)+
+  stat_cor() +
+  labs(title = 'GM PRS',
+       x = 'Age (years)',
+       y = 'PRS Zscore')
+
+# Create a scatter plot of PRS Zscore by Age
+age_wm <- ggplot(subset(data, !is.na(age)), aes(x = age, y = WM_ZSCORE)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ x)+
+  stat_cor() +
+  labs(title = 'WM PRS',
+       x = 'Age (years)',
+       y = 'PRS Zscore')
+
+# Create a scatter plot of PRS Zscore by Age
+age_fc <- ggplot(subset(data, !is.na(age)), aes(x = age, y = FC_ZSCORE)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = y ~ x)+
   stat_cor() +
   labs(title = 'PRS Zscore by Age',
        x = 'Age (years)',
        y = 'PRS Zscore')
+
+# Arrange the plots in a grid
+grid.arrange(age_gm, age_wm, age_fc, ncol = 3)
 ```
-### WM
+
+## Education
 
 ``` {r}
 # Create a scatter plot of PRS Zscore by Age
-ggplot(subset(data, !is.na(age)), aes(x = age, y = WM_ZSCORE)) +
+edu_gm <- ggplot(subset(data, !is.na(YearsEd)), aes(x = YearsEd, y = GM_ZSCORE)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = y ~ x)+
   stat_cor() +
-  labs(title = 'PRS Zscore by Age',
-       x = 'Age (years)',
-       y = 'PRS Zscore')
-```
-
-### FC
-
-``` {r}
-# Create a scatter plot of PRS Zscore by Age
-ggplot(subset(data, !is.na(age)), aes(x = age, y = FC_ZSCORE)) +
-  geom_point() +
-  geom_smooth(method = 'lm', formula = y ~ x)+
-  stat_cor() +
-  labs(title = 'PRS Zscore by Age',
-       x = 'Age (years)',
-       y = 'PRS Zscore')
-```
-
-## Division by Years of Education {.tabset}
-
-### GM
-
-``` {r}
-# Create a scatter plot of PRS Zscore by Age
-ggplot(subset(data, !is.na(YearsEd)), aes(x = YearsEd, y = GM_ZSCORE)) +
-  geom_point() +
-  geom_smooth(method = 'lm', formula = y ~ x)+
-  stat_cor() +
-  labs(title = 'PRS Zscore by Years of Education',
-       x = 'Age (years)',
-       y = 'PRS Zscore')
-```
-
-### WM
-
-``` {r}
-# Create a scatter plot of PRS Zscore by Age
-ggplot(subset(data, !is.na(YearsEd)), aes(x = YearsEd, y = WM_ZSCORE)) +
-  geom_point() +
-  geom_smooth(method = 'lm', formula = y ~ x)+
-  stat_cor() +
-  labs(title = 'PRS Zscore by Years of Education',
+  labs(title = 'GM PRS',
        x = 'Education (years)',
        y = 'PRS Zscore')
-```
 
-### FC
+# Create a scatter plot of PRS Zscore by Age
+edu_wm <- ggplot(subset(data, !is.na(YearsEd)), aes(x = YearsEd, y = WM_ZSCORE)) +
+  geom_point() +
+  geom_smooth(method = 'lm', formula = y ~ x)+
+  stat_cor() +
+  labs(title = 'WM PRS',
+       x = 'Education (years)',
+       y = 'PRS Zscore')
 
-``` {r}
 # Create a scatter plot of PRS Zscore by Years Education
-ggplot(subset(data, !is.na(YearsEd)), aes(x = YearsEd, y = FC_ZSCORE)) +
+edu_fc <- ggplot(subset(data, !is.na(YearsEd)), aes(x = YearsEd, y = FC_ZSCORE)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = y ~ x)+
   stat_cor() +
-  labs(title = 'PRS Zscore by Years of Education',
+  labs(title = 'FC PRS',
        x = 'Education (years)',
        y = 'PRS Zscore')
+
+# Arrange the plots in a grid
+grid.arrange(edu_gm, edu_wm, edu_fc, ncol = 3)
 ```
 
-## General Linear Models with Blood Biomarkers
+# General Linear Models with Blood Biomarkers {.tabset}
 
 We build a general linear model that predict blood biomarkers using PRS, Age and PRS\*Age interaction
 
-### pTau217 {.tabset}
-
-#### GM
+## pTau217
 
 ```{r}
-model_ptau_gm <- glm(pTau217 ~ GM_ZSCORE*age, data = data)
-summary(model_ptau_gm)
+# GM
+ptau_gm <- glm(pTau217 ~ GM_ZSCORE*age, data = data)
+ptau_gm_standardized <- effectsize::standardize(ptau_gm, standardize = "all")
+ptau_gm_results <- summary(ptau_gm_standardized)$coefficients
+cat("pTau217 GM PRS \n")
+cat("Standardized Effect GM PRS * Age: ", ptau_gm_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", ptau_gm_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect GM PRS: ", ptau_gm_results["GM_ZSCORE", "Estimate"], 
+    "p-val", ptau_gm_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", ptau_gm_results["age", "Estimate"], 
+    "p-val", ptau_gm_results["age", "Pr(>|t|)"], "\n")
+
+# WM
+ptau_wm <- glm(pTau217 ~ WM_ZSCORE*age, data = data)
+ptau_wm_standardized <- effectsize::standardize(ptau_wm, standardize = "all")
+ptau_wm_results <- summary(ptau_wm_standardized)$coefficients
+cat("pTau217 WM PRS \n")
+cat("Standardized Effect WM PRS * Age: ", ptau_wm_results["WM_ZSCORE:age", "Estimate"], 
+    "p-val", ptau_wm_results["WM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect WM PRS: ", ptau_wm_results["WM_ZSCORE", "Estimate"], 
+    "p-val", ptau_wm_results["WM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", ptau_wm_results["age", "Estimate"], 
+    "p-val", ptau_wm_results["age", "Pr(>|t|)"], "\n")
+
+# FC
+ptau_fc <- glm(pTau217 ~ FC_ZSCORE*age, data = data)
+ptau_fc_standardized <- effectsize::standardize(ptau_fc, standardize = "all")
+ptau_fc_results <- summary(ptau_fc_standardized)$coefficients
+cat("pTau217 FC PRS \n")
+cat("Standardized Effect FC PRS * Age: ", ptau_fc_results["FC_ZSCORE:age", "Estimate"], 
+    "p-val", ptau_fc_results["FC_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect FC PRS: ", ptau_fc_results["FC_ZSCORE", "Estimate"], 
+    "p-val", ptau_fc_results["FC_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", ptau_fc_results["age", "Estimate"], 
+    "p-val", ptau_fc_results["age", "Pr(>|t|)"], "\n")
 ```
 
-#### WM
+## GFAP
 
 ```{r}
-model_ptau_wm <- glm(pTau217 ~ WM_ZSCORE*age, data = data)
-summary(model_ptau_wm)
+# GM
+gfap_gm <- glm(GFAP ~ GM_ZSCORE*age, data = data)
+gfap_gm_standardized <- effectsize::standardize(gfap_gm, standardize = "all")
+gfap_gm_results <- summary(gfap_gm_standardized)$coefficients
+cat("GFAP GM PRS \n")
+cat("Standardized Effect GM PRS * Age: ", gfap_gm_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", gfap_gm_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect GM PRS: ", gfap_gm_results["GM_ZSCORE", "Estimate"], 
+    "p-val", gfap_gm_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", gfap_gm_results["age", "Estimate"], 
+    "p-val", gfap_gm_results["age", "Pr(>|t|)"], "\n")
+
+# WM
+gfap_wm <- glm(GFAP ~ WM_ZSCORE*age, data = data)
+gfap_wm_standardized <- effectsize::standardize(gfap_wm, standardize = "all")
+gfap_wm_results <- summary(gfap_wm_standardized)$coefficients
+cat("GFAP WM PRS \n")
+cat("Standardized Effect WM PRS * Age: ", gfap_wm_results["WM_ZSCORE:age", "Estimate"], 
+    "p-val", gfap_wm_results["WM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect WM PRS: ", gfap_wm_results["WM_ZSCORE", "Estimate"], 
+    "p-val", gfap_wm_results["WM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", gfap_wm_results["age", "Estimate"], 
+    "p-val", gfap_wm_results["age", "Pr(>|t|)"], "\n")
+
+# FC
+gfap_fc <- glm(GFAP ~ FC_ZSCORE*age, data = data)
+gfap_fc_standardized <- effectsize::standardize(gfap_fc, standardize = "all")
+gfap_fc_results <- summary(gfap_fc_standardized)$coefficients
+cat("GFAP FC PRS \n")
+cat("Standardized Effect FC PRS * Age: ", gfap_fc_results["FC_ZSCORE:age", "Estimate"], 
+    "p-val", gfap_fc_results["FC_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect FC PRS: ", gfap_fc_results["FC_ZSCORE", "Estimate"], 
+    "p-val", gfap_fc_results["FC_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", gfap_fc_results["age", "Estimate"], 
+    "p-val", gfap_fc_results["age", "Pr(>|t|)"], "\n")
 ```
 
-#### FC
+## NFL
 
 ```{r}
-model_ptau_fc <- glm(pTau217 ~ FC_ZSCORE*age, data = data)
-summary(model_ptau_fc)
+# GM
+nfl_gm <- glm(NF.L ~ GM_ZSCORE*age, data = data)
+nfl_gm_standardized <- effectsize::standardize(nfl_gm, standardize = "all")
+nfl_gm_results <- summary(nfl_gm_standardized)$coefficients
+cat("NF.L GM PRS \n")
+cat("Standardized Effect GM PRS * Age: ", nfl_gm_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", nfl_gm_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect GM PRS: ", nfl_gm_results["GM_ZSCORE", "Estimate"], 
+    "p-val", nfl_gm_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", nfl_gm_results["age", "Estimate"], 
+    "p-val", nfl_gm_results["age", "Pr(>|t|)"], "\n")
+
+# WM
+nfl_wm <- glm(NF.L ~ WM_ZSCORE*age, data = data)
+nfl_wm_standardized <- effectsize::standardize(nfl_wm, standardize = "all")
+nfl_wm_results <- summary(nfl_wm_standardized)$coefficients
+cat("NF.L WM PRS \n")
+cat("Standardized Effect WM PRS * Age: ", nfl_wm_results["WM_ZSCORE:age", "Estimate"], 
+    "p-val", nfl_wm_results["WM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect WM PRS: ", nfl_wm_results["WM_ZSCORE", "Estimate"], 
+    "p-val", nfl_wm_results["WM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", nfl_wm_results["age", "Estimate"], 
+    "p-val", nfl_wm_results["age", "Pr(>|t|)"], "\n")
+
+# FC
+nfl_fc <- glm(NF.L ~ FC_ZSCORE*age, data = data)
+nfl_fc_standardized <- effectsize::standardize(nfl_fc, standardize = "all")
+nfl_fc_results <- summary(nfl_fc_standardized)$coefficients
+cat("NF.L FC PRS \n")
+cat("Standardized Effect FC PRS * Age: ", nfl_fc_results["FC_ZSCORE:age", "Estimate"], 
+    "p-val", nfl_fc_results["FC_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect FC PRS: ", nfl_fc_results["FC_ZSCORE", "Estimate"], 
+    "p-val", nfl_fc_results["FC_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", nfl_fc_results["age", "Estimate"], 
+    "p-val", nfl_fc_results["age", "Pr(>|t|)"], "\n")
 ```
-
-### NFL {.tabset}
-
-#### GM
+## AB42
 
 ```{r}
-model_nfl_gm <- glm(NF.L ~ GM_ZSCORE*age, data = data)
-summary(model_nfl_gm)
+# GM
+ab_gm <- glm(AB42 ~ GM_ZSCORE*age, data = data)
+ab_gm_standardized <- effectsize::standardize(ab_gm, standardize = "all")
+ab_gm_results <- summary(ab_gm_standardized)$coefficients
+cat("AB42 GM PRS \n")
+cat("Standardized Effect GM PRS * Age: ", ab_gm_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", ab_gm_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect GM PRS: ", ab_gm_results["GM_ZSCORE", "Estimate"], 
+    "p-val", ab_gm_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", ab_gm_results["age", "Estimate"], 
+    "p-val", ab_gm_results["age", "Pr(>|t|)"], "\n")
+
+# WM
+ab_wm <- glm(AB42 ~ WM_ZSCORE*age, data = data)
+ab_wm_standardized <- effectsize::standardize(ab_wm, standardize = "all")
+ab_wm_results <- summary(ab_wm_standardized)$coefficients
+cat("AB42 WM PRS \n")
+cat("Standardized Effect WM PRS * Age: ", ab_wm_results["WM_ZSCORE:age", "Estimate"], 
+    "p-val", ab_wm_results["WM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect WM PRS: ", ab_wm_results["WM_ZSCORE", "Estimate"], 
+    "p-val", ab_wm_results["WM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", ab_wm_results["age", "Estimate"], 
+    "p-val", ab_wm_results["age", "Pr(>|t|)"], "\n")
+
+# FC
+ab_fc <- glm(AB42 ~ FC_ZSCORE*age, data = data)
+ab_fc_standardized <- effectsize::standardize(ab_fc, standardize = "all")
+ab_fc_results <- summary(ab_fc_standardized)$coefficients
+cat("AB42 FC PRS \n")
+cat("Standardized Effect FC PRS * Age: ", ab_fc_results["FC_ZSCORE:age", "Estimate"], 
+    "p-val", ab_fc_results["FC_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect FC PRS: ", ab_fc_results["FC_ZSCORE", "Estimate"], 
+    "p-val", ab_fc_results["FC_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age: ", ab_fc_results["age", "Estimate"], 
+    "p-val", ab_fc_results["age", "Pr(>|t|)"], "\n")
 ```
 
-#### WM
+# Sensitivity Analysis 
 
 ```{r}
-model_nfl_wm <- glm(NF.L ~ WM_ZSCORE*age, data = data)
-summary(model_nfl_wm)
-```
+# Sensitivity analysis adding other PRS
+ptau217_allprs <- glm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age, data = data)
+ptau217_allprs_standardized <- effectsize::standardize(ptau217_allprs, standardize = "all")
+ptau217_allprs_results <- summary(ptau217_allprs_standardized)$coefficients
+cat("Adding PRS \n")
+cat("Standardized Effect GM PRS * Age: ", ptau217_allprs_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", ptau217_allprs_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
 
-#### FC
+# Sensitivity analysis adding other PRS and covariates
+ptau217_allprs_covars <- glm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age + Sex + YearsEd + e4 + Amyloid, data = data)
+ptau217_allprs_covars_standardized <- effectsize::standardize(ptau217_allprs_covars, standardize = "all")
+ptau217_allprs_covars_results <- summary(ptau217_allprs_covars_standardized)$coefficients
+cat("Adding PRS and covariates \n")
+cat("Standardized Effect GM PRS * Age: ", ptau217_allprs_covars_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", ptau217_allprs_covars_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+
+# Sensitivity analysis adding other PRS, covariates and interactions
+pTau217_biomakers <- glm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age + Sex + YearsEd + e4 + Amyloid + GFAP + NF.L + AB42, data = data)
+pTau217_biomakers_standardized <- effectsize::standardize(pTau217_biomakers, standardize = "all")
+pTau217_biomakers_results <- summary(pTau217_biomakers_standardized)$coefficients
+cat("Adding PRS, covariates and interactions \n")
+cat("Standardized Effect GM PRS * Age: ", pTau217_biomakers_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", pTau217_biomakers_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+```
 
 ```{r}
-model_nfl_fc <- glm(NF.L ~ FC_ZSCORE*age, data = data)
-summary(model_nfl_fc)
+# Plot significant results
+p_ptau_gm <- plot_model(model_ptau_gm, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
+p_ptau_gm
 ```
-
-### GFAP {.tabset}
-
-#### GM
-
-```{r}
-model_gfap_gm <- glm(GFAP ~ GM_ZSCORE*age, data = data)
-summary(model_gfap_gm)
-```
-
-#### WM
-
-```{r}
-model_gfap_wm <- glm(GFAP ~ WM_ZSCORE*age, data = data)
-summary(model_gfap_wm)
-```
-
-#### FC
-
-```{r}
-model_gfap_fc <- glm(GFAP ~ FC_ZSCORE*age, data = data)
-summary(model_gfap_fc)
-```
-
-## pTau217 and PRS GM analysis
 
 Plot of pTau217 and PRS GM Zscore
 
@@ -361,221 +500,27 @@ ggplot(subset(data, !is.na(pTau217)), aes(x = GM_ZSCORE, y = pTau217)) +
        x = 'PRS Zscore',
        y = 'pTau217')
 ```
-General linear model plot
 
-```{r}
-# GLM
-p <- plot_model(model_ptau_gm, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
-p +
-  ggtitle(NULL) +
-  labs(color = 'Grey Matter PRS',
-      x = 'Age (years)') +
-# Make x-axis and y-axis more readable
-  theme(
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16)
-  )
-```
-
-
-```{r}
-# Scatter plot of GM Prs and pTau217 with best fit line
-p <- plot_model(model_ptau_gm, type = c('pred'), terms = c('GM_ZSCORE'))+
-  geom_point(data = data, aes(x = GM_ZSCORE, y = pTau217), 
-             inherit.aes = F) +
-  labs(title = NULL, 
-       x = 'GM PRS Zscore',
-       y = 'pTau217') 
-p
-```
-
-### Sensitivity analysis {.tabset}
-
-We cannot include Amyloid because pTau217 is only done in amyloid positive.
-
-#### Tertiles
-
-```{r}
-model_ptau_tertiles <- lm(pTau217 ~ GM_tertiles*age, data = data)
-summary(model_ptau_tertiles)
-p <- plot_model(model_ptau_tertiles, type = c('pred'), terms = c('age', 'GM_tertiles [1st, 2nd, 3rd]'), show.values = TRUE)
-p +
-  ggtitle(NULL) +
-  labs(color = 'Grey Matter PRS',
-      x = 'Age (years)')
-```
-#### PRS 
-
-```{r}
-# Sensitivity analysis
-model_ptau_prs <- lm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age, data = data)
-summary(model_ptau_prs)
-p <- plot_model(model_ptau_prs, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
-p +
-  ggtitle(NULL) +
-  labs(color = 'Grey Matter PRS',
-      x = 'Age (years)') +
-# Make x-axis and y-axis more readable
-  theme(
-    axis.text.x = element_text(size = 14),
-    axis.text.y = element_text(size = 14),
-    axis.title.x = element_text(size = 16),
-    axis.title.y = element_text(size = 16),
-    legend.text = element_text(size = 14),
-    legend.title = element_text(size = 16)
-  )
-```
-
-#### Sex, e4 and YearsEd
-
-```{r}
-# Sensitivity analysis
-model_ptau_covars <- lm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age + SEX + e4 + YearsEd, data = data)
-summary(model_ptau_covars)
-```
-
-#### Sex, e4 and YearsEd interaction with Age
-
-```{r}
-# Include interaction with age
-model_ptau_covars_interactions <- lm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age + SEX*age + e4*age + YearsEd*age, data = data)
-summary(model_ptau_covars_interactions)
-```
-
-#### Blood Biomarkers
-
-```{r}
-# Blood Biomarkers
-model_ptau_blood <- lm(pTau217 ~ GM_ZSCORE*age + NF.L + GFAP, data = data)
-summary(model_ptau_blood)
-cor.test(data$pTau217, data$GFAP, method = 'pearson')
-```
-
-
-### Sex differences
+# Sex differences
 
 Add sex interaction
 
 ```{r}
-data$SEX <- as.factor(data$SEX)
-model_ptau_sex <- lm(pTau217 ~ GM_ZSCORE*age*SEX, data = data)
+model_ptau_sex <- lm(pTau217 ~ GM_ZSCORE*age*Sex, data = data)
 summary(model_ptau_sex)
-plot_model(model_ptau_sex, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]', 'SEX'), show.values = TRUE)
+plot_model(model_ptau_sex, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]', 'Sex'), show.values = TRUE)
 ```
 
 Stratified sex models
 
 ```{r}
-model_ptau_male <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data, SEX == "Male"))
+model_ptau_male <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data, Sex == "Male"))
 summary(model_ptau_male)
 plot_model(model_ptau_male, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
 ```
 
 ```{r}
-model_ptau_female <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data, SEX == "Female"))
+model_ptau_female <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data, Sex == "Female"))
 summary(model_ptau_female)
 plot_model(model_ptau_female, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
-```
-
-By tertiles
-
-```{r}
-model_ptau_sex_tertiles <- lm(pTau217 ~ GM_tertiles*age*SEX, data = data)
-summary(model_ptau_sex_tertiles)
-plot_model(model_ptau_sex_tertiles, type = c('pred'), terms = c('age', 'GM_tertiles', 'SEX'), show.values = TRUE)
-```
-
-```{r}
-model_ptau_male_tertiles <- lm(pTau217 ~ GM_tertiles*age, data = subset(data, SEX == "Male"))
-summary(model_ptau_male_tertiles)
-plot_model(model_ptau_male_tertiles, type = c('pred'), terms = c('age', 'GM_tertiles'), show.values = TRUE)
-```
-
-```{r}
-model_ptau_female_tertiles <- lm(pTau217 ~ GM_tertiles*age, data = subset(data, SEX == "Female"))
-summary(model_ptau_female_tertiles)
-plot_model(model_ptau_female_tertiles, type = c('pred'), terms = c('age', 'GM_tertiles'), show.values = TRUE)
-```
-
-### Effect on Longidutinal PACC
-
-```{r}
-# Load PACC data
-pacc <- read.csv('~/Documents/Projects/AgingBrainStudy/data/A4/processed/longitudinal_PACC.csv')
-
-# Filter subjects with less than 2 data points
-pacc <- pacc %>% 
-  arrange(BID, pacc_time) %>%  
-  group_by(BID) %>% 
-  add_tally(name = 'nTimePoints', wt = !is.na(PACC)) %>%
-  filter(nTimePoints >= 2)
-
-# Arrange by pacc_time and calculate PACC_change_bl
-pacc <- pacc %>% 
-  arrange(BID, pacc_time) %>%
-  group_by(BID) %>%
-  mutate(PACC_bl = PACC[1]) %>%
-  mutate(PACC_change_bl = PACC - PACC_bl)
-
-# Create cohort variable
-pacc <- pacc %>%
-  group_by(BID) %>%
-  dplyr::mutate(Cohort = case_when(
-    SUBSTUDY == "SF" | SUBSTUDY == "LEARN" ~ "LEARN/SF",
-    SUBSTUDY == "A4" & TX == "Placebo" ~ "A4 Placebo",
-    SUBSTUDY == "A4" & TX == "Solanezumab" ~ "A4 Treated",
-    TRUE ~ NA))
-
-# Merge with data on GM Zscore, GM tertiles
-pacc <- merge(pacc, data[, c('BID', 'pTau217', 'GM_ZSCORE', 'GM_tertiles')], by = 'BID', all.x = TRUE)
-
-# Ensure variables are factors
-pacc <- pacc %>%
-  mutate_at(vars(SUBSTUDY, TX, Cohort, SEX, RACE, ETHNIC, APOE, APOEGN, QSVERSION_PACC), factor)
-```
-
-```{r}
-lmm_results <- lme(PACC ~ I(pacc_time^2) + pacc_time*pTau217 + Cumulative_Dose_Scaled + QSVERSION_PACC + pacc_time*Cohort, data = pacc, random = ~ pacc_time|BID, na.action = 'na.omit', method = c('ML'), control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
-summary(lmm_results)
-plot_model(lmm_results, type = c('pred'), terms = c('pacc_time', 'pTau217'))
-```
-```{r}
-lmm_results <- lme(PACC ~ I(pacc_time^2) + pacc_time*GM_ZSCORE+ Cumulative_Dose_Scaled + QSVERSION_PACC + pacc_time*Cohort, data = pacc, random = ~ pacc_time|BID, na.action = 'na.omit', method = c('ML'), control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
-summary(lmm_results)
-plot_model(lmm_results, type = c('pred'), terms = c('pacc_time', 'GM_ZSCORE'))
-```
-
-```{r}
-lmm_results <- lme(PACC ~ I(pacc_time^2) + pacc_time*GM_tertiles+ Cumulative_Dose_Scaled + QSVERSION_PACC + pacc_time*Cohort, data = pacc, random = ~ pacc_time|BID, na.action = 'na.omit', method = c('ML'), control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
-summary(lmm_results)
-plot_model(lmm_results, type = c('pred'), terms = c('pacc_time', 'GM_tertiles'))
-```
-
-```{r}
-lmm_results_gm <- lme(PACC ~ I(pacc_time^2) + pacc_time*pTau217*GM_ZSCORE + Cumulative_Dose_Scaled + QSVERSION_PACC + pacc_time*Cohort, data = pacc, random = ~ pacc_time|BID, na.action = 'na.omit', method = c('ML'), control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
-summary(lmm_results_gm)
-plot_model(lmm_results_gm, type = c('pred'), terms = c('pacc_time', 'GM_ZSCORE', 'pTau217'))
-```
-
-```{r}
-lmm_results_tertiles <- lme(PACC ~ I(pacc_time^2) + pacc_time*pTau217*GM_tertiles + Cumulative_Dose_Scaled + QSVERSION_PACC + pacc_time*Cohort, data = pacc, random = ~ pacc_time|BID, na.action = 'na.omit', method = c('ML'), control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
-summary(lmm_results_tertiles)
-plot_model(lmm_results_tertiles, type = c('pred'), terms = c('pacc_time', 'GM_tertiles', 'pTau217'))
-```
-
-
-## Amyloid positive subjects
-
-As we find significance for pTau217 but they are all apositive to we get significant results if we only look at Amyloid Positive in other biomarkers.
-
-```{r}
-data_apos <- subset(data, Amyloid == 'positive')
-model_apos_nfl <- lm(NF.L ~ GM_ZSCORE*age, data = data_apos)
-summary(model_apos_nfl)
-model_apos_gfap <- lm(GFAP ~ GM_ZSCORE*age, data = data_apos)
-summary(model_apos_gfap)
 ```
