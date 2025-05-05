@@ -14,10 +14,10 @@ knit: (
 ---
 
 ```{r, include = FALSE, warning = FALSE, message = FALSE}
-library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(gridExtra);library(effsize)
+library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(gridExtra);library(effsize);library(MatchIt)
 
 
-knitr::opts_chunk$set(echo = FALSE, message = FALSE)
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 theme_set(theme_bw())
 ```
 
@@ -61,8 +61,9 @@ prs$FC_ZSCORE <- (prs$FC_SCORE - mean(prs$FC_SCORE, na.rm = TRUE)) / sd(prs$FC_S
 data <- read.csv('~/Documents/Projects/PRSBrainAgePlasma/data/a4_baseline_plasma/a4_plasma_05012025_full.csv', 
                  row.names=1)  %>%
         dplyr::select(BID, Sex, Baseline_Age, Education, apoe_genotype, Amyloid_Status, PTAU217, NF.L., GFAP.) %>%
-        rename(age = Baseline_Age, YearsEd = Education, Amyloid = Amyloid_Status, pTau217 = PTAU217, NF.L = NF.L., GFAP = GFAP.) %>%
-        mutate(Sex = recode(Sex, `1` = "Female", `0` = "Male"),
+        rename(age = Baseline_Age, YearsEd = Education, Amyloid = Amyloid_Status, pTau217 = PTAU217, NF.L = NF.L., GFAP = GFAP., Sex_coded = Sex) %>%
+        mutate(Sex = recode(Sex_coded, `1` = "Female", `0` = "Male"),
+               Sex_coded = as.factor(Sex_coded),
                Sex = as.factor(Sex),
                Amyloid = as.factor(Amyloid))
 
@@ -82,6 +83,9 @@ data <- data[!(data$GFAP_n == 1 & data$NF.L_n == 0), ]
 
 # Remove those that have 0 for pTau217, GFAP, NFL
 data <- data[!(data$pTau217 == 0 & data$GFAP == 0 & data$NF.L == 0), ]
+
+# Remove NA rows in YearsEd
+data <- data[!is.na(data$YearsEd), ]
 
 # APOE e4 status
 data$e4 <- ifelse(grepl("e4", data$apoe_genotype), "e4+", "e4-")
@@ -515,7 +519,7 @@ cat("Standardized Effect GM PRS: ", pTau217_biomakers_results["GM_ZSCORE", "Esti
 
 # Sex differences
 
-Add sex interaction
+## Sex interaction
 
 ```{r}
 ptau_sex <- lm(pTau217 ~ GM_ZSCORE*age*Sex, data = data)
@@ -526,10 +530,14 @@ cat("Standardized Effect GM PRS * Age * Sex: ", ptau_sex_results["GM_ZSCORE:age:
     "p-val", ptau_sex_results["GM_ZSCORE:age:SexMale", "Pr(>|t|)"], "\n")
 cat("Standardized Effect GM PRS * Age: ", ptau_sex_results["GM_ZSCORE:age", "Estimate"], 
     "p-val", ptau_sex_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age * SEX: ", ptau_sex_results["age:SexMale", "Estimate"], 
+    "p-val", ptau_sex_results["age:SexMale", "Pr(>|t|)"], "\n")
 plot_model(ptau_sex, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]', 'Sex'), show.values = TRUE)
 ```
 
-Stratified sex models
+## Startified sex models {.tabset}
+
+### Male
 
 ```{r}
 ptau_male <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data, Sex == "Male"))
@@ -540,8 +548,12 @@ cat("Standardized Effect GM PRS * Age: ", ptau_male_results["GM_ZSCORE:age", "Es
     "p-val", ptau_male_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
 cat("Standardized Effect GM PRS: ", ptau_male_results["GM_ZSCORE", "Estimate"],
     "p-val", ptau_male_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age:", ptau_male_results["age", "Estimate"],
+    "p-val", ptau_male_results["age", "Pr(>|t|)"], "\n")
 plot_model(ptau_male, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
 ```
+
+### Female
 
 ```{r}
 ptau_female <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data, Sex == "Female"))
@@ -552,5 +564,35 @@ cat("Standardized Effect GM PRS * Age: ", ptau_female_results["GM_ZSCORE:age", "
     "p-val", ptau_female_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
 cat("Standardized Effect GM PRS: ", ptau_female_results["GM_ZSCORE", "Estimate"],
     "p-val", ptau_female_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age:", ptau_female_results["age", "Estimate"],
+    "p-val", ptau_female_results["age", "Pr(>|t|)"], "\n")
 plot_model(ptau_female, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
+```
+
+## Senstivity analysis
+
+Matching Female and Male subjects on Age, Years of Education, APOEe4 and Amyloid
+
+```{r}
+data_match <- match.data(matchit(Sex_coded ~ age + YearsEd + e4 + Amyloid, data = data, method = "optimal"))
+
+# Male model
+ptau_male_match <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data_match, Sex == "Male"))
+ptau_male_match_standardized <- effectsize::standardize(ptau_male_match , standardize = "all")
+ptau_male_match_results <- summary(ptau_male_match_standardized)$coefficients
+cat("Male only model\n")
+cat("Standardized Effect GM PRS * Age: ", ptau_male_match_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", ptau_male_match_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age:", ptau_male_match_results["age", "Estimate"],
+    "p-val", ptau_male_match_results["age", "Pr(>|t|)"], "\n")
+
+# Female model
+ptau_female_match <- lm(pTau217 ~ GM_ZSCORE*age, data = subset(data_match, Sex == "Female"))
+ptau_female_match_standardized <- effectsize::standardize(ptau_female_match , standardize = "all")
+ptau_female_match_results <- summary(ptau_female_match_standardized)$coefficients
+cat("Female only model\n")
+cat("Standardized Effect GM PRS * Age: ", ptau_female_match_results["GM_ZSCORE:age", "Estimate"], 
+    "p-val", ptau_female_match_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+cat("Standardized Effect Age:", ptau_female_match_results["age", "Estimate"],
+    "p-val", ptau_female_match_results["age", "Pr(>|t|)"], "\n")
 ```
