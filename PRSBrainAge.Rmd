@@ -14,7 +14,7 @@ knit: (
 ---
 
 ```{r, include = FALSE, warning = FALSE, message = FALSE}
-library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(gridExtra);library(effsize);library(MatchIt)
+library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(gridExtra);library(effsize);library(MatchIt);library(tidyr)
 
 
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
@@ -58,7 +58,7 @@ prs$WM_ZSCORE <- (prs$WM_SCORE - mean(prs$WM_SCORE, na.rm = TRUE)) / sd(prs$WM_S
 prs$FC_ZSCORE <- (prs$FC_SCORE - mean(prs$FC_SCORE, na.rm = TRUE)) / sd(prs$FC_SCORE, na.rm = TRUE)
 
 # Load data
-data <- read.csv('~/Documents/Projects/PRSBrainAgePlasma/data/a4_baseline_plasma/a4_plasma_05012025_full.csv', 
+data_a4 <- read.csv('~/Documents/Projects/PRSBrainAgePlasma/data/a4_baseline_plasma/a4_plasma_05012025_full.csv', 
                  row.names=1)  %>%
         dplyr::select(BID, Sex, Baseline_Age, Education, apoe_genotype, Amyloid_Status, PTAU217, NF.L., GFAP.) %>%
         rename(age = Baseline_Age, YearsEd = Education, Amyloid = Amyloid_Status, pTau217 = PTAU217, NF.L = NF.L., GFAP = GFAP., Sex_coded = Sex) %>%
@@ -68,31 +68,31 @@ data <- read.csv('~/Documents/Projects/PRSBrainAgePlasma/data/a4_baseline_plasma
                Amyloid = as.factor(Amyloid))
 
 # Filter value reads of PTau217
-data$pTau217[data$pTau217 == "<LLOQ" | data$pTau217 == ">ULOQ"] <- NA
-data$pTau217 <- as.numeric(data$pTau217)
-data$NF.L <- as.numeric(data$NF.L)
+data_a4$pTau217[data_a4$pTau217 == "<LLOQ" | data_a4$pTau217 == ">ULOQ"] <- NA
+data_a4$pTau217 <- as.numeric(data_a4$pTau217)
+data_a4$NF.L <- as.numeric(data_a4$NF.L)
 
 # For numbering puprose
-data$ptau_n <- ifelse(!is.na(data$pTau217), 1, 0)
-data$NF.L_n <- ifelse(!is.na(data$NF.L), 1, 0)
-data$GFAP_n <- ifelse(!is.na(data$GFAP), 1, 0)
+data_a4$ptau_n <- ifelse(!is.na(data_a4$pTau217), 1, 0)
+data_a4$NF.L_n <- ifelse(!is.na(data_a4$NF.L), 1, 0)
+data_a4$GFAP_n <- ifelse(!is.na(data_a4$GFAP), 1, 0)
 
 # Remove those that have NF.L 1 but GFAP 0 or GFAP 1 but NF.L 0 (they all come from the same platform)
-data <- data[!(data$NF.L_n == 1 & data$GFAP_n == 0), ]
-data <- data[!(data$GFAP_n == 1 & data$NF.L_n == 0), ]
+data_a4 <- data_a4[!(data_a4$NF.L_n == 1 & data_a4$GFAP_n == 0), ]
+data_a4 <- data_a4[!(data_a4$GFAP_n == 1 & data_a4$NF.L_n == 0), ]
 
 # Remove those that have 0 for pTau217, GFAP, NFL
-data <- data[!(data$pTau217 == 0 & data$GFAP == 0 & data$NF.L == 0), ]
+data_a4 <- data_a4[!(data_a4$pTau217 == 0 & data_a4$GFAP == 0 & data_a4$NF.L == 0), ]
 
 # Remove NA rows in YearsEd
-data <- data[!is.na(data$YearsEd), ]
+data_a4 <- data_a4[!is.na(data_a4$YearsEd), ]
 
 # APOE e4 status
-data$e4 <- ifelse(grepl("e4", data$apoe_genotype), "e4+", "e4-")
-data$e4 <- as.factor(data$e4)
+data_a4$e4 <- ifelse(grepl("e4", data_a4$apoe_genotype), "e4+", "e4-")
+data_a4$e4 <- as.factor(data_a4$e4)
 
 # Merge PRS
-data <- merge(data, prs, by = 'BID')
+data <- merge(data_a4, prs, by = 'BID')
 ```
 
 ## Cohort Demographics
@@ -515,6 +515,93 @@ cat("Standardized Effect GM PRS * Age: ", pTau217_biomakers_results["GM_ZSCORE:a
     "p-val", pTau217_biomakers_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
 cat("Standardized Effect GM PRS: ", pTau217_biomakers_results["GM_ZSCORE", "Estimate"],
     "p-val", pTau217_biomakers_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+```
+
+```{r}
+# Define the threshold values to iterate over
+thresholds <- c(0.001, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5)
+
+# Create a data frame to store results
+results <- data.frame(
+  threshold = numeric(),
+  GM_age_beta = numeric(),
+  GM_age_pval = numeric(),
+  stringsAsFactors = FALSE
+)
+
+# Loop through each threshold
+for (threshold in thresholds) {
+  
+  # Load PRS data for the current threshold (GM only)
+  prs_gm <- read.table(sprintf('~/Documents/Projects/PRSBrainAgePlasma/data/prs_scores/gm/prs2.pT%s.sscore', threshold), 
+                       header = FALSE, 
+                       row.names = 1,
+                       sep = '\t') %>%
+            dplyr::select(V2, V5) %>%
+            rename(BID = V2, GM_SCORE = V5)
+  
+  # Merge with main data
+  data_with_prs <- merge(data_a4, prs_gm, by = 'BID')
+  
+  # Run the analysis with GM only
+  ptau217_gm <- glm(pTau217 ~ GM_SCORE*age, data = data_with_prs)
+  ptau217_gm_standardized <- effectsize::standardize(ptau217_gm, standardize = "all")
+  ptau217_gm_results <- summary(ptau217_gm_standardized)$coefficients
+  
+  # Store results in data frame
+  results <- rbind(results, data.frame(
+    threshold = threshold,
+    GM_age_beta = ptau217_gm_results["GM_SCORE:age", "Estimate"],
+    GM_age_pval = ptau217_gm_results["GM_SCORE:age", "Pr(>|t|)"]
+  ))
+}
+
+# Print summary table of results
+cat("=============================================\n")
+cat("SUMMARY OF RESULTS ACROSS THRESHOLDS\n")
+cat("=============================================\n")
+
+# Format the results table for better readability
+formatted_results <- results %>%
+  mutate(across(ends_with("_pval"), ~sprintf("%.4f", .))) %>%
+  mutate(across(ends_with("_beta"), ~sprintf("%.4f", .)))
+
+# Print the formatted results
+print(formatted_results)
+
+# Prepare data for plotting (GM coefficients)
+gm_plot_data <- results %>%
+  dplyr::select(threshold, GM_age_beta, GM_age_pval) %>%
+  gather(key = "coefficient", value = "value", -threshold) %>%
+  mutate(type = ifelse(grepl("beta", coefficient), "Beta", "P-value"),
+         interaction = ifelse(grepl("age", coefficient), "With Age", "Main Effect"))
+
+# Plot GM coefficients
+p1 <- ggplot(gm_plot_data %>% filter(type == "Beta"), aes(x = threshold, y = value, color = interaction)) +
+  geom_line() +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "GM PRS Effect Sizes Across Thresholds",
+       x = "Threshold",
+       y = "Standardized Beta",
+       color = "Interaction") +
+  theme(legend.position = "bottom")
+
+# Plot p-values
+p2 <- ggplot(gm_plot_data %>% filter(type == "P-value"), aes(x = threshold, y = value, color = interaction)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = 0.05, linetype = "dashed", color = "red") +
+  theme_minimal() +
+  labs(title = "GM PRS P-values Across Thresholds",
+       x = "Threshold",
+       y = "P-value",
+       color = "Interaction") +
+  theme(legend.position = "bottom")
+
+# Print plots
+print(p1)
+print(p2)
 ```
 
 # Sex differences
