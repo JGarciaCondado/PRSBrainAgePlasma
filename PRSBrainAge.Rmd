@@ -16,6 +16,20 @@ knit: (
 ```{r, include = FALSE, warning = FALSE, message = FALSE}
 library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(gridExtra);library(effsize);library(MatchIt);library(tidyr)
 
+# Theme for downloading figures
+theme_all <- theme(
+      # Text sizes
+      text = element_text(family = "Times New Roman", size = 12),
+      axis.text = element_text(family = "Times New Roman", size = 10),
+      axis.title = element_text(family = "Times New Roman", size = 12),
+      legend.title = element_text(family = "Times New Roman",size = 12),
+      legend.text = element_text(family = "Times New Roman",size = 10),
+      strip.text = element_text(family = "Times New Roman", size = 10),
+      # Margins
+      axis.title.x = element_text(margin = margin(t = unit(10, "mm"))),
+      axis.title.y = element_text(margin = margin(r = unit(10, "mm"))),
+      plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),  
+    ) 
 
 knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
 theme_set(theme_bw())
@@ -56,6 +70,11 @@ prs <- merge(prs, prs_fc, by = 'BID')
 prs$GM_ZSCORE <- (prs$GM_SCORE - mean(prs$GM_SCORE, na.rm = TRUE)) / sd(prs$GM_SCORE, na.rm = TRUE)
 prs$WM_ZSCORE <- (prs$WM_SCORE - mean(prs$WM_SCORE, na.rm = TRUE)) / sd(prs$WM_SCORE, na.rm = TRUE)
 prs$FC_ZSCORE <- (prs$FC_SCORE - mean(prs$FC_SCORE, na.rm = TRUE)) / sd(prs$FC_SCORE, na.rm = TRUE)
+
+# Remove any row with any z_score above or below 5
+prs <- prs[!(prs$GM_ZSCORE > 5 | prs$GM_ZSCORE < -5), ]
+prs <- prs[!(prs$WM_ZSCORE > 5 | prs$WM_ZSCORE < -5), ]
+prs <- prs[!(prs$FC_ZSCORE > 5 | prs$FC_ZSCORE < -5), ]
 
 # Load data
 data_a4 <- read.csv('~/Documents/Projects/PRSBrainAgePlasma/data/a4_baseline_plasma/a4_plasma_05012025_full.csv', 
@@ -466,18 +485,43 @@ cat("Standardized Effect Age: ", nfl_fc_results["age", "Estimate"],
 We only find significant results when looking at pTau217 and the effect of GM BrainAge PRS.
 
 ```{r}
-ggplot(subset(data, !is.na(pTau217)), aes(x = GM_ZSCORE, y = pTau217)) +
+ptau217_gm_plot <- ggplot(subset(data, !is.na(pTau217)), aes(x = GM_ZSCORE, y = pTau217)) +
   geom_point() +
   geom_smooth(method = 'lm', formula = y ~ x)+
   stat_cor() +
-  labs(title = 'Comparison of PRS to pTau217 at Baseline',
-       x = 'PRS Zscore',
+  labs(x = 'PRS Zscore',
        y = 'pTau217')
+ptau217_gm_plot
+
+# Save the plot
+ptau217_gm_plot <- ptau217_gm_plot + theme_all
+ggsave(filename = "~/Documents/Projects/PRSBrainAgePlasma/figures/GM_PRS_vs_pTau217.png", 
+       plot = ptau217_gm_plot, 
+       width = 100, height = 75, units = "mm", dpi = 300)
 ```
 
 ```{r}
 # Plot OLS model
-plot_model(ptau_gm, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
+custom_labels <- c("-1 Standard Deviation", "0 Mean", "+1 Standard Deviation")
+ptau217_glm_plot <- plot_model(ptau_gm, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(65, 90)) +
+  scale_y_continuous(limits = c(0.1, 0.5)) +
+  labs(
+    title = "",
+    y = "pTau217",
+    x = "Age",
+    color = "GM BrainAge PRS"
+  ) +
+  scale_color_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels) +
+  scale_fill_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels)
+ptau217_glm_plot
+
+# Save the plot
+ptau217_glm_plot <- ptau217_glm_plot + theme_all
+ggsave(filename = "~/Documents/Projects/PRSBrainAgePlasma/figures/GM_PRS_vs_pTau217_glm.png", 
+       plot = ptau217_glm_plot, 
+       width = 140, height = 75, units = "mm", dpi = 300)
 ```
 
 
@@ -516,6 +560,8 @@ cat("Standardized Effect GM PRS * Age: ", pTau217_biomakers_results["GM_ZSCORE:a
 cat("Standardized Effect GM PRS: ", pTau217_biomakers_results["GM_ZSCORE", "Estimate"],
     "p-val", pTau217_biomakers_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
 ```
+
+We also train the model for different thresholds of the PRS. The results are shown in the table below.
 
 ```{r}
 # Define the threshold values to iterate over
@@ -619,7 +665,27 @@ cat("Standardized Effect GM PRS * Age: ", ptau_sex_results["GM_ZSCORE:age", "Est
     "p-val", ptau_sex_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
 cat("Standardized Effect Age * SEX: ", ptau_sex_results["age:SexMale", "Estimate"], 
     "p-val", ptau_sex_results["age:SexMale", "Pr(>|t|)"], "\n")
-plot_model(ptau_sex, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]', 'Sex'), show.values = TRUE)
+
+# Plot OLS model
+ptau217_glm_interaction_plot <- plot_model(ptau_sex, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]', 'Sex'), show.values = TRUE) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(65, 90)) +
+  scale_y_continuous(limits = c(0.1, 0.5)) +
+  labs(
+    title = "",
+    y = "pTau217",
+    x = "Age",
+    color = "GM BrainAge PRS"
+  ) +
+  scale_color_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels) +
+  scale_fill_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels)
+ptau217_glm_interaction_plot
+
+# Save the plot
+ptau217_glm_interaction_plot <- ptau217_glm_interaction_plot + theme_all
+ggsave(filename = "~/Documents/Projects/PRSBrainAgePlasma/figures/pTau217_interaction.png", 
+       plot = ptau217_glm_interaction_plot, 
+       width = 140, height = 75, units = "mm", dpi = 300)
 ```
 
 ## Startified sex models {.tabset}
@@ -637,7 +703,27 @@ cat("Standardized Effect GM PRS: ", ptau_male_results["GM_ZSCORE", "Estimate"],
     "p-val", ptau_male_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
 cat("Standardized Effect Age:", ptau_male_results["age", "Estimate"],
     "p-val", ptau_male_results["age", "Pr(>|t|)"], "\n")
-plot_model(ptau_male, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
+
+# Plot
+ptau_male_plot <- plot_model(ptau_male, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(65, 90)) +
+  scale_y_continuous(limits = c(0.1, 0.5)) +
+  labs(
+    title = "",
+    y = "pTau217",
+    x = "Age",
+    color = "GM BrainAge PRS"
+  ) +
+  scale_color_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels) +
+  scale_fill_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels)
+ptau_male_plot
+
+# Save plot
+ptau_male_plot <- ptau_male_plot + theme_all + theme(legend.position = "none")
+ggsave(filename = "~/Documents/Projects/PRSBrainAgePlasma/figures/pTau217_male.png", 
+       plot = ptau_male_plot, 
+       width = 70, height = 75, units = "mm", dpi = 300)
 ```
 
 ### Female
@@ -653,7 +739,27 @@ cat("Standardized Effect GM PRS: ", ptau_female_results["GM_ZSCORE", "Estimate"]
     "p-val", ptau_female_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
 cat("Standardized Effect Age:", ptau_female_results["age", "Estimate"],
     "p-val", ptau_female_results["age", "Pr(>|t|)"], "\n")
-plot_model(ptau_female, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE)
+
+# Plot
+ptau_female_plot <- plot_model(ptau_female, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(65, 90)) +
+  scale_y_continuous(limits = c(0.1, 0.5)) +
+  labs(
+    title = "",
+    y = "pTau217",
+    x = "Age",
+    color = "GM BrainAge PRS"
+  ) +
+  scale_color_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels) +
+  scale_fill_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels)
+ptau_female_plot
+
+# Save plot
+ptau_female_plot <- ptau_female_plot + theme_all + theme(legend.position = "none")
+ggsave(filename = "~/Documents/Projects/PRSBrainAgePlasma/figures/pTau217_female.png", 
+       plot = ptau_female_plot, 
+       width = 70, height = 75, units = "mm", dpi = 300)
 ```
 
 ## Senstivity analysis
