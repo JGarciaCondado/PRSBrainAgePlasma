@@ -374,11 +374,14 @@ ptau_gm_standardized <- effectsize::standardize(ptau_gm, standardize = "all")
 ptau_gm_results <- summary(ptau_gm_standardized)$coefficients
 cat("pTau217 GM PRS \n")
 cat("Standardized Effect GM PRS * Age: ", ptau_gm_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", ptau_gm_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_gm_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", ptau_gm_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", ptau_gm_results["GM_ZSCORE", "Estimate"], 
-    "p-val", ptau_gm_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", ptau_gm_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", ptau_gm_results["GM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", ptau_gm_results["age", "Estimate"], 
-    "p-val", ptau_gm_results["age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_gm_results["age", "Pr(>|t|)"],
+    "Standard Error", ptau_gm_results["age", "Std. Error"], "\n")
 
 # WM
 ptau_wm <- glm(pTau217 ~ WM_ZSCORE*age, data = data)
@@ -386,11 +389,14 @@ ptau_wm_standardized <- effectsize::standardize(ptau_wm, standardize = "all")
 ptau_wm_results <- summary(ptau_wm_standardized)$coefficients
 cat("pTau217 WM PRS \n")
 cat("Standardized Effect WM PRS * Age: ", ptau_wm_results["WM_ZSCORE:age", "Estimate"], 
-    "p-val", ptau_wm_results["WM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_wm_results["WM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", ptau_wm_results["WM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect WM PRS: ", ptau_wm_results["WM_ZSCORE", "Estimate"], 
-    "p-val", ptau_wm_results["WM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", ptau_wm_results["WM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", ptau_wm_results["WM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", ptau_wm_results["age", "Estimate"], 
-    "p-val", ptau_wm_results["age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_wm_results["age", "Pr(>|t|)"],
+    "Standard Error", ptau_wm_results["age", "Std. Error"], "\n")
 
 # FC
 ptau_fc <- glm(pTau217 ~ FC_ZSCORE*age, data = data)
@@ -398,11 +404,14 @@ ptau_fc_standardized <- effectsize::standardize(ptau_fc, standardize = "all")
 ptau_fc_results <- summary(ptau_fc_standardized)$coefficients
 cat("pTau217 FC PRS \n")
 cat("Standardized Effect FC PRS * Age: ", ptau_fc_results["FC_ZSCORE:age", "Estimate"], 
-    "p-val", ptau_fc_results["FC_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_fc_results["FC_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", ptau_fc_results["FC_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect FC PRS: ", ptau_fc_results["FC_ZSCORE", "Estimate"], 
-    "p-val", ptau_fc_results["FC_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", ptau_fc_results["FC_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", ptau_fc_results["FC_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", ptau_fc_results["age", "Estimate"], 
-    "p-val", ptau_fc_results["age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_fc_results["age", "Pr(>|t|)"],
+    "Standard Error", ptau_fc_results["age", "Std. Error"], "\n")
 ```
 
 ## GFAP
@@ -414,11 +423,14 @@ gfap_gm_standardized <- effectsize::standardize(gfap_gm, standardize = "all")
 gfap_gm_results <- summary(gfap_gm_standardized)$coefficients
 cat("GFAP GM PRS \n")
 cat("Standardized Effect GM PRS * Age: ", gfap_gm_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", gfap_gm_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", gfap_gm_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", gfap_gm_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", gfap_gm_results["GM_ZSCORE", "Estimate"], 
-    "p-val", gfap_gm_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", gfap_gm_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", gfap_gm_results["GM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", gfap_gm_results["age", "Estimate"], 
-    "p-val", gfap_gm_results["age", "Pr(>|t|)"], "\n")
+    "p-val", gfap_gm_results["age", "Pr(>|t|)"],
+    "Standard Error", gfap_gm_results["age", "Std. Error"], "\n")
 
 # WM
 gfap_wm <- glm(GFAP ~ WM_ZSCORE*age, data = data)
@@ -426,11 +438,14 @@ gfap_wm_standardized <- effectsize::standardize(gfap_wm, standardize = "all")
 gfap_wm_results <- summary(gfap_wm_standardized)$coefficients
 cat("GFAP WM PRS \n")
 cat("Standardized Effect WM PRS * Age: ", gfap_wm_results["WM_ZSCORE:age", "Estimate"], 
-    "p-val", gfap_wm_results["WM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", gfap_wm_results["WM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", gfap_wm_results["WM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect WM PRS: ", gfap_wm_results["WM_ZSCORE", "Estimate"], 
-    "p-val", gfap_wm_results["WM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", gfap_wm_results["WM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", gfap_wm_results["WM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", gfap_wm_results["age", "Estimate"], 
-    "p-val", gfap_wm_results["age", "Pr(>|t|)"], "\n")
+    "p-val", gfap_wm_results["age", "Pr(>|t|)"],
+    "Standard Error", gfap_wm_results["age", "Std. Error"], "\n")
 
 # FC
 gfap_fc <- glm(GFAP ~ FC_ZSCORE*age, data = data)
@@ -438,11 +453,14 @@ gfap_fc_standardized <- effectsize::standardize(gfap_fc, standardize = "all")
 gfap_fc_results <- summary(gfap_fc_standardized)$coefficients
 cat("GFAP FC PRS \n")
 cat("Standardized Effect FC PRS * Age: ", gfap_fc_results["FC_ZSCORE:age", "Estimate"], 
-    "p-val", gfap_fc_results["FC_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", gfap_fc_results["FC_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", gfap_fc_results["FC_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect FC PRS: ", gfap_fc_results["FC_ZSCORE", "Estimate"], 
-    "p-val", gfap_fc_results["FC_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", gfap_fc_results["FC_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", gfap_fc_results["FC_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", gfap_fc_results["age", "Estimate"], 
-    "p-val", gfap_fc_results["age", "Pr(>|t|)"], "\n")
+    "p-val", gfap_fc_results["age", "Pr(>|t|)"],
+    "Standard Error", gfap_fc_results["age", "Std. Error"], "\n")
 ```
 
 ## NFL
@@ -454,11 +472,14 @@ nfl_gm_standardized <- effectsize::standardize(nfl_gm, standardize = "all")
 nfl_gm_results <- summary(nfl_gm_standardized)$coefficients
 cat("NF.L GM PRS \n")
 cat("Standardized Effect GM PRS * Age: ", nfl_gm_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", nfl_gm_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", nfl_gm_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", nfl_gm_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", nfl_gm_results["GM_ZSCORE", "Estimate"], 
-    "p-val", nfl_gm_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", nfl_gm_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", nfl_gm_results["GM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", nfl_gm_results["age", "Estimate"], 
-    "p-val", nfl_gm_results["age", "Pr(>|t|)"], "\n")
+    "p-val", nfl_gm_results["age", "Pr(>|t|)"],
+    "Standard Error", nfl_gm_results["age", "Std. Error"], "\n")
 
 # WM
 nfl_wm <- glm(NF.L ~ WM_ZSCORE*age, data = data)
@@ -466,11 +487,14 @@ nfl_wm_standardized <- effectsize::standardize(nfl_wm, standardize = "all")
 nfl_wm_results <- summary(nfl_wm_standardized)$coefficients
 cat("NF.L WM PRS \n")
 cat("Standardized Effect WM PRS * Age: ", nfl_wm_results["WM_ZSCORE:age", "Estimate"], 
-    "p-val", nfl_wm_results["WM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", nfl_wm_results["WM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", nfl_wm_results["WM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect WM PRS: ", nfl_wm_results["WM_ZSCORE", "Estimate"], 
-    "p-val", nfl_wm_results["WM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", nfl_wm_results["WM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", nfl_wm_results["WM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", nfl_wm_results["age", "Estimate"], 
-    "p-val", nfl_wm_results["age", "Pr(>|t|)"], "\n")
+    "p-val", nfl_wm_results["age", "Pr(>|t|)"],
+    "Standard Error", nfl_wm_results["age", "Std. Error"], "\n")
 
 # FC
 nfl_fc <- glm(NF.L ~ FC_ZSCORE*age, data = data)
@@ -478,11 +502,14 @@ nfl_fc_standardized <- effectsize::standardize(nfl_fc, standardize = "all")
 nfl_fc_results <- summary(nfl_fc_standardized)$coefficients
 cat("NF.L FC PRS \n")
 cat("Standardized Effect FC PRS * Age: ", nfl_fc_results["FC_ZSCORE:age", "Estimate"], 
-    "p-val", nfl_fc_results["FC_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", nfl_fc_results["FC_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", nfl_fc_results["FC_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect FC PRS: ", nfl_fc_results["FC_ZSCORE", "Estimate"], 
-    "p-val", nfl_fc_results["FC_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", nfl_fc_results["FC_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", nfl_fc_results["FC_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age: ", nfl_fc_results["age", "Estimate"], 
-    "p-val", nfl_fc_results["age", "Pr(>|t|)"], "\n")
+    "p-val", nfl_fc_results["age", "Pr(>|t|)"],
+    "Standard Error", nfl_fc_results["age", "Std. Error"], "\n")
 ```
 
 # pTau217 and GM BrainAge PRS
@@ -541,9 +568,11 @@ ptau217_allprs_standardized <- effectsize::standardize(ptau217_allprs, standardi
 ptau217_allprs_results <- summary(ptau217_allprs_standardized)$coefficients
 cat("Adding PRS \n")
 cat("Standardized Effect GM PRS * Age: ", ptau217_allprs_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", ptau217_allprs_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau217_allprs_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", ptau217_allprs_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", ptau217_allprs_results["GM_ZSCORE", "Estimate"],
-    "p-val", ptau217_allprs_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", ptau217_allprs_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", ptau217_allprs_results["GM_ZSCORE", "Std. Error"], "\n")
 
 # Sensitivity analysis adding other PRS and covariates
 ptau217_allprs_covars <- glm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age + Sex + YearsEd + e4 + Amyloid, data = data)
@@ -551,9 +580,11 @@ ptau217_allprs_covars_standardized <- effectsize::standardize(ptau217_allprs_cov
 ptau217_allprs_covars_results <- summary(ptau217_allprs_covars_standardized)$coefficients
 cat("Adding PRS and covariates \n")
 cat("Standardized Effect GM PRS * Age: ", ptau217_allprs_covars_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", ptau217_allprs_covars_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau217_allprs_covars_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", ptau217_allprs_covars_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", ptau217_allprs_covars_results["GM_ZSCORE", "Estimate"],
-    "p-val", ptau217_allprs_covars_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", ptau217_allprs_covars_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", ptau217_allprs_covars_results["GM_ZSCORE", "Std. Error"], "\n")
 
 # Sensitivity analysis adding other PRS, covariates and other plasma biomarkers
 pTau217_biomakers <- glm(pTau217 ~ GM_ZSCORE*age + WM_ZSCORE*age + FC_ZSCORE*age + Sex + YearsEd + e4 + Amyloid + GFAP + NF.L, data = data)
@@ -561,9 +592,11 @@ pTau217_biomakers_standardized <- effectsize::standardize(pTau217_biomakers, sta
 pTau217_biomakers_results <- summary(pTau217_biomakers_standardized)$coefficients
 cat("Adding PRS, covariates and other blood biomarkers \n")
 cat("Standardized Effect GM PRS * Age: ", pTau217_biomakers_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", pTau217_biomakers_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", pTau217_biomakers_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", pTau217_biomakers_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", pTau217_biomakers_results["GM_ZSCORE", "Estimate"],
-    "p-val", pTau217_biomakers_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", pTau217_biomakers_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", pTau217_biomakers_results["GM_ZSCORE", "Std. Error"], "\n")
 ```
 
 We also train the model for different thresholds of the PRS. The results are shown in the table below.
@@ -665,11 +698,14 @@ ptau_sex_standardized <- effectsize::standardize(ptau_sex, standarize="all")
 ptau_sex_results <- summary(ptau_sex_standardized)$coefficients
 cat("Adding GM PRS x Age X Sex interaction \n")
 cat("Standardized Effect GM PRS * Age * Sex: ", ptau_sex_results["GM_ZSCORE:age:SexMale", "Estimate"], 
-    "p-val", ptau_sex_results["GM_ZSCORE:age:SexMale", "Pr(>|t|)"], "\n")
+    "p-val", ptau_sex_results["GM_ZSCORE:age:SexMale", "Pr(>|t|)"],
+    "Standard Error", ptau_sex_results["GM_ZSCORE:age:SexMale", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS * Age: ", ptau_sex_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", ptau_sex_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_sex_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", ptau_sex_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect Age * SEX: ", ptau_sex_results["age:SexMale", "Estimate"], 
-    "p-val", ptau_sex_results["age:SexMale", "Pr(>|t|)"], "\n")
+    "p-val", ptau_sex_results["age:SexMale", "Pr(>|t|)"],
+    "Standard Error", ptau_sex_results["age:SexMale", "Std. Error"], "\n")
 
 # Plot OLS model
 ptau217_glm_interaction_plot <- plot_model(ptau_sex, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]', 'Sex'), show.values = TRUE) +
@@ -703,11 +739,14 @@ ptau_male_standardized <- effectsize::standardize(ptau_male, standardize = "all"
 ptau_male_results <- summary(ptau_male_standardized)$coefficients
 cat("Male only model\n")
 cat("Standardized Effect GM PRS * Age: ", ptau_male_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", ptau_male_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_male_results["GM_ZSCORE:age", "Pr(>|t|)"],
+    "Standard Error", ptau_male_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", ptau_male_results["GM_ZSCORE", "Estimate"],
-    "p-val", ptau_male_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", ptau_male_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", ptau_male_results["GM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age:", ptau_male_results["age", "Estimate"],
-    "p-val", ptau_male_results["age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_male_results["age", "Pr(>|t|)"],
+    "Standard Error", ptau_male_results["age", "Std. Error"], "\n")
 
 # Plot
 ptau_male_plot <- plot_model(ptau_male, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE) +
@@ -739,11 +778,14 @@ ptau_female_standardized <- effectsize::standardize(ptau_female, standardize = "
 ptau_female_results <- summary(ptau_female_standardized)$coefficients
 cat("Female only model\n")
 cat("Standardized Effect GM PRS * Age: ", ptau_female_results["GM_ZSCORE:age", "Estimate"], 
-    "p-val", ptau_female_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_female_results["GM_ZSCORE:age", "Pr(>|t|)"], 
+    "Standard Error", ptau_female_results["GM_ZSCORE:age", "Std. Error"], "\n")
 cat("Standardized Effect GM PRS: ", ptau_female_results["GM_ZSCORE", "Estimate"],
-    "p-val", ptau_female_results["GM_ZSCORE", "Pr(>|t|)"], "\n")
+    "p-val", ptau_female_results["GM_ZSCORE", "Pr(>|t|)"],
+    "Standard Error", ptau_female_results["GM_ZSCORE", "Std. Error"], "\n")
 cat("Standardized Effect Age:", ptau_female_results["age", "Estimate"],
-    "p-val", ptau_female_results["age", "Pr(>|t|)"], "\n")
+    "p-val", ptau_female_results["age", "Pr(>|t|)"],
+    "Standard Error", ptau_female_results["age", "Std. Error"], "\n")
 
 # Plot
 ptau_female_plot <- plot_model(ptau_female, type = c('pred'), terms = c('age', 'GM_ZSCORE [-1, 0, 1]'), show.values = TRUE) +
