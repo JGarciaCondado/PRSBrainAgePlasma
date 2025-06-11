@@ -512,7 +512,7 @@ cat("Standardized Effect Age: ", nfl_fc_results["age", "Estimate"],
     "Standard Error", nfl_fc_results["age", "Std. Error"], "\n")
 ```
 
-# pTau217 and GM BrainAge PRS
+# Sensitivity analysis
 
 We only find significant results when looking at pTau217 and the effect of GM BrainAge PRS.
 
@@ -555,9 +555,6 @@ ggsave(filename = "~/Documents/Projects/PRSBrainAgePlasma/figures/GM_PRS_vs_pTau
        plot = ptau217_glm_plot, 
        width = 140, height = 75, units = "mm", dpi = 300)
 ```
-
-
-# Sensitivity Analysis 
 
 We investigate how adding the other PRS, covariates and other plasma biomarkers affects the results.
 
@@ -835,61 +832,4 @@ cat("Standardized Effect GM PRS * Age: ", ptau_female_match_results["GM_ZSCORE:a
     "p-val", ptau_female_match_results["GM_ZSCORE:age", "Pr(>|t|)"], "\n")
 cat("Standardized Effect Age:", ptau_female_match_results["age", "Estimate"],
     "p-val", ptau_female_match_results["age", "Pr(>|t|)"], "\n")
-```
-
-# MAPT gene
-
-Correlation of PRS Zscore with MAPT gene expression in transcriptomic data from A4/LEARN.
-
-```{r}
-# Correlation between mapt and GM PRS
-mapt_gm <- ggplot(data, aes(x = mapt, y = GM_ZSCORE)) +
-  geom_point() +
-  geom_smooth(method = 'lm', formula = y ~ x)+
-  stat_cor() +
-  labs(title = 'GM PRS',
-       x = 'MAPT',
-       y = 'PRS Zscore')
-
-# Correlation between mapt and GM PRS by sex
-mapt_gm
-
-mapt_gm_sex <- ggplot(data, aes(x = mapt, y = GM_ZSCORE, color = Sex, group = Sex)) +
-  geom_point() +
-  geom_smooth(method = 'lm', formula = y ~ x) +
-  stat_cor(aes(group = Sex), label.x.npc = "left", label.y.npc = c(0.85, 0.95)) +
-  labs(title = 'GM PRS by Sex',
-       x = 'MAPT',
-       y = 'PRS Zscore') +
-  scale_color_manual(values = c("blue", "red")) +  # Customize colors if needed
-  theme_minimal()
-
-mapt_gm_sex
-
-# Correlation between mapt and ptau217
-mapt_ptau <- ggplot(data, aes(x = mapt, y = pTau217)) +
-  geom_point() +
-  geom_smooth(method = 'lm', formula = y ~ x)+
-  stat_cor() +
-  labs(title = 'pTau217',
-       x = 'MAPT',
-       y = 'pTau217')
-
-mapt_ptau
-```
-
-Interaction of mapt with ptau217 and age
-
-```{r}
-# Interaction of mapt, GM PRS and ptau217
-mapt_ptau <- lm(pTau217 ~ mapt*age, data = data)
-mapt_ptau_standardized <- effectsize::standardize(mapt_ptau, standardize = "all")
-mapt_ptau_results <- summary(mapt_ptau_standardized)$coefficients
-cat("MAPT interaction with pTau217 \n")
-cat("Standardized Effect MAPT * Age: ", mapt_ptau_results["mapt:age", "Estimate"], 
-    "p-val", mapt_ptau_results["mapt:age", "Pr(>|t|)"], "\n")
-cat("Standardized Effect MAPT: ", mapt_ptau_results["mapt", "Estimate"],
-    "p-val", mapt_ptau_results["mapt", "Pr(>|t|)"], "\n")
-cat("Standardized Effect Age:", mapt_ptau_results["age", "Estimate"],
-    "p-val", mapt_ptau_results["age", "Pr(>|t|)"], "\n")
 ```
