@@ -1,0 +1,261 @@
+---
+title: "MAPT A4"
+author: "Jorge Garcia Condado"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+knit: (
+  function(inputFile, encoding) { 
+    rmarkdown::render('MAPTA$.Rmd',
+      output_file = paste('~/Documents/Projects/PRSBrainAgePlasma/PRSBrainAge', '.html', sep=''))
+      })
+---
+
+```{r, include = FALSE, warning = FALSE, message = FALSE}
+library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(gridExtra);library(effsize);library(MatchIt);library(tidyr);
+library(readxl);library(effectsize)
+
+# Theme for downloading figures
+theme_all <- theme(
+      # Text sizes
+      text = element_text(family = "Times New Roman", size = 12),
+      axis.text = element_text(family = "Times New Roman", size = 10),
+      axis.title = element_text(family = "Times New Roman", size = 12),
+      legend.title = element_text(family = "Times New Roman",size = 12),
+      legend.text = element_text(family = "Times New Roman",size = 10),
+      strip.text = element_text(family = "Times New Roman", size = 10),
+      # Margins
+      axis.title.x = element_text(margin = margin(t = unit(10, "mm"))),
+      axis.title.y = element_text(margin = margin(r = unit(10, "mm"))),
+      plot.margin = unit(c(0.1, 0.1, 0.1, 0.1), "cm"),  
+    ) 
+
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+theme_set(theme_bw())
+
+# Working directory
+project_root <- getwd()
+```
+
+# MAPT GENE
+
+```{r, include = FALSE}
+
+# Load data
+data_a4 <- read.csv(file.path(project_root, 'data', 'a4', 'a4_baseline_plasma', 'a4_plasma_05012025_full.csv'), 
+                 row.names=1)  %>%
+        dplyr::select(BID, Sex, Baseline_Age, Education, apoe_genotype, Amyloid_Status, PTAU217, NF.L., GFAP.) %>%
+        rename(age = Baseline_Age, YearsEd = Education, Amyloid = Amyloid_Status, pTau217 = PTAU217, NF.L = NF.L., GFAP = GFAP., Sex_coded = Sex) %>%
+        mutate(Sex = recode(Sex_coded, `1` = "Female", `0` = "Male"),
+               Sex_coded = as.factor(Sex_coded),
+               Sex = as.factor(Sex),
+               Amyloid = as.factor(Amyloid))
+
+# Filter value reads of PTau217
+data_a4$pTau217[data_a4$pTau217 == "<LLOQ" | data_a4$pTau217 == ">ULOQ"] <- NA
+data_a4$pTau217 <- as.numeric(data_a4$pTau217)
+data_a4$NF.L <- as.numeric(data_a4$NF.L)
+
+# APOE e4 status
+data_a4$e4 <- ifelse(grepl("e4", data_a4$apoe_genotype), "e4+", "e4-")
+data_a4$e4 <- as.factor(data_a4$e4)
+
+# Load data on MAPT gene
+mapt <- read_excel(file.path(project_root, 'data', 'a4', 'Haplotypes.xlsx'))
+
+# Load PRS
+prs <- read.table(file.path(project_root, 'data', 'a4', 'prs_scores', 'gm', 'prs2.pT0.5.sscore'), 
+                     header = FALSE, 
+                     row.names = 1,
+                     sep = '\t') %>%
+          dplyr::select(V2, V5) %>%
+          rename(BID = V2,GM_SCORE= V5)
+prs$GM_ZSCORE <- (prs$GM_SCORE - mean(prs$GM_SCORE, na.rm = TRUE)) / sd(prs$GM_SCORE, na.rm = TRUE)
+prs <- prs[!(prs$GM_ZSCORE > 5 | prs$GM_ZSCORE < -5), ]
+
+# Data merge
+data_a4 <- merge(data_a4, mapt, by.x = "BID", by.y = "ID", all = TRUE)
+data_a4 <- merge(data_a4, prs, by.x = "BID", by.y = "BID", all = TRUE)
+
+# Define the H2 column name
+#H2_col = 'rs8070723'
+H2_col = 'rs1052553'
+
+# Create H2 copy number variable by summing the two allele columns
+data_a4 <- data_a4 %>%
+  mutate(H2_copies = .data[[paste0(H2_col, '_1')]] + .data[[paste0(H2_col, '_2')]])
+# Create grouping: at least one H2 copy vs no H2 copy
+data_a4 <- data_a4 %>%
+  mutate(H2_group = ifelse(H2_copies >= 1, "≥1 H2 copy", "0 H2 copies"))
+
+```
+
+## Boxplots
+
+Difference in GM PRS by number of copies:
+
+```{r}
+# Count subjects with GM_ZSCORE by H2 copies
+cat("Subjects with GM_ZSCORE by H2 copies:\n")
+print(table(data_a4$H2_copies[!is.na(data_a4$GM_ZSCORE)]))
+
+# Kruskal-Wallis test
+kruskal_result <- kruskal.test(GM_ZSCORE ~ H2_copies, data = data_a4, na.action = na.omit)
+cat("\nKruskal-Wallis p-value:", kruskal_result$p.value, "\n")
+
+# Pairwise comparisons
+cat("\nPairwise p-values:\n")
+pairwise_result <- pairwise.wilcox.test(data_a4$GM_ZSCORE, 
+                                        data_a4$H2_copies,
+                                        p.adjust.method = "bonferroni",
+                                        na.action = na.omit)
+print(pairwise_result$p.value)
+
+# Boxplot - filter out NAs
+ggplot(data_a4 %>% filter(!is.na(H2_copies) & !is.na(GM_ZSCORE)), 
+       aes(x = factor(H2_copies), y = GM_ZSCORE)) +
+  geom_boxplot(fill = "lightblue", outlier.color = "red") +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 1) +
+  labs(title = "GM_ZSCORE by H2 Copies",
+       x = "H2 Copies",
+       y = "GM_ZSCORE") +
+  theme_minimal()
+```
+
+Difference in pTau217 by number of copies:
+
+```{r}
+# Count subjects with pTau217 by H2 copies
+cat("Subjects with pTau217 by H2 copies:\n")
+print(table(data_a4$H2_copies[!is.na(data_a4$pTau217)]))
+
+# Kruskal-Wallis test
+kruskal_result <- kruskal.test(pTau217 ~ H2_copies, data = data_a4, na.action = na.omit)
+cat("\nKruskal-Wallis p-value:", kruskal_result$p.value, "\n")
+
+# Pairwise comparisons
+cat("\nPairwise p-values:\n")
+pairwise_result <- pairwise.wilcox.test(data_a4$pTau217, 
+                                        data_a4$H2_copies,
+                                        p.adjust.method = "bonferroni",
+                                        na.action = na.omit)
+print(pairwise_result$p.value)
+
+# Boxplot - filter out NAs
+ggplot(data_a4 %>% filter(!is.na(H2_copies) & !is.na(pTau217)), 
+       aes(x = factor(H2_copies), y = pTau217)) +
+  geom_boxplot(fill = "lightblue", outlier.color = "red") +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 1) +
+  labs(title = "pTau217 by H2 Copies",
+       x = "H2 Copies",
+       y = "pTau217") +
+  theme_minimal()
+```
+Differences in pTau217 between 0 and >=1 H2 copies:
+
+```{r}
+# Count groups
+cat("H2 grouping counts (with pTau217):\n")
+print(table(data_a4$H2_group[!is.na(data_a4$pTau217)]))
+
+# Wilcoxon test
+wilcox_result <- wilcox.test(pTau217 ~ H2_group, data = data_a4, na.action = na.omit)
+cat("\nWilcoxon p-value:", wilcox_result$p.value, "\n")
+
+# Boxplot
+ggplot(data_a4 %>% filter(!is.na(H2_copies) & !is.na(pTau217)), 
+       aes(x = H2_group, y = pTau217)) +
+  geom_boxplot(fill = "lightblue", outlier.color = "red") +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 1) +
+  labs(title = "pTau217: H2 carriers vs no H2",
+       x = "Group",
+       y = "pTau217") +
+  theme_minimal()
+```
+
+## Linear Models
+
+```{r}
+
+# Check the distribution
+cat("H2 copy number distribution:\n")
+print(table(data_a4$H2_copies, useNA = "ifany"))
+
+# H2 model
+ptau_h2 <- glm(pTau217 ~ H2_copies*age, data = data_a4)
+ptau_h2_standardized <- standardize(ptau_h2, standardize = "all")
+ptau_h2_results <- summary(ptau_h2_standardized)$coefficients
+
+cat("\npTau217 H2 Model\n")
+cat("================\n")
+cat("Standardized Effect H2 copies * Age: ", ptau_h2_results["H2_copies:age", "Estimate"], 
+    "p-val:", ptau_h2_results["H2_copies:age", "Pr(>|t|)"],
+    "SE:", ptau_h2_results["H2_copies:age", "Std. Error"], "\n")
+cat("Standardized Effect H2 copies: ", ptau_h2_results["H2_copies", "Estimate"], 
+    "p-val:", ptau_h2_results["H2_copies", "Pr(>|t|)"],
+    "SE:", ptau_h2_results["H2_copies", "Std. Error"], "\n")
+cat("Standardized Effect Age: ", ptau_h2_results["age", "Estimate"], 
+    "p-val:", ptau_h2_results["age", "Pr(>|t|)"],
+    "SE:", ptau_h2_results["age", "Std. Error"], "\n")
+```
+
+```{r}
+# Plot H2 model
+custom_labels <- c("0 H2 copies (H1hom)", "1 H2 copy (H1het)", "2 H2 copies (H2hom)")
+ptau217_h2_plot <- plot_model(ptau_h2, type = c('pred'), terms = c('age', 'H2_copies [0, 1, 2]'), show.values = TRUE) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(65, 90)) +
+  scale_y_continuous(limits = c(0.1, 0.7)) +
+  labs(
+    title = "",
+    y = "pTau217",
+    x = "Age",
+    color = "H2 Copies"
+  ) +
+  scale_color_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels) +
+  scale_fill_manual(values = c("#009a37", "#0081ff", "#e53f2a"), labels = custom_labels)
+
+ptau217_h2_plot
+```
+
+```{r}
+# H2 model with sex interaction
+ptau_h2_sex <- glm(pTau217 ~ H2_copies*age*Sex, data = data_a4)
+ptau_h2_sex_standardized <- standardize(ptau_h2_sex, standardize = "all")
+ptau_h2_sex_results <- summary(ptau_h2_sex_standardized)$coefficients
+
+# Print results
+cat("\npTau217 H2 * Age * Sex Model\n")
+cat("============================\n")
+cat("Main Effects:\n")
+cat("-------------\n")
+cat("H2 copies: ", ptau_h2_sex_results["H2_copies", "Estimate"], 
+    "p-val:", ptau_h2_sex_results["H2_copies", "Pr(>|t|)"],
+    "SE:", ptau_h2_sex_results["H2_copies", "Std. Error"], "\n")
+cat("Age: ", ptau_h2_sex_results["age", "Estimate"], 
+    "p-val:", ptau_h2_sex_results["age", "Pr(>|t|)"],
+    "SE:", ptau_h2_sex_results["age", "Std. Error"], "\n")
+cat("Sex: ", ptau_h2_sex_results["SexMale", "Estimate"], 
+    "p-val:", ptau_h2_sex_results["SexMale", "Pr(>|t|)"],
+    "SE:", ptau_h2_sex_results["SexMale", "Std. Error"], "\n")
+
+cat("\nTwo-way Interactions:\n")
+cat("--------------------\n")
+cat("H2 copies * Age: ", ptau_h2_sex_results["H2_copies:age", "Estimate"], 
+    "p-val:", ptau_h2_sex_results["H2_copies:age", "Pr(>|t|)"],
+    "SE:", ptau_h2_sex_results["H2_copies:age", "Std. Error"], "\n")
+cat("H2 copies * Sex: ", ptau_h2_sex_results["H2_copies:SexMale", "Estimate"], 
+    "p-val:", ptau_h2_sex_results["H2_copies:SexMale", "Pr(>|t|)"],
+    "SE:", ptau_h2_sex_results["H2_copies:SexMale", "Std. Error"], "\n")
+cat("Age * Sex: ", ptau_h2_sex_results["age:SexMale", "Estimate"], 
+    "p-val:", ptau_h2_sex_results["age:SexMale", "Pr(>|t|)"],
+    "SE:", ptau_h2_sex_results["age:SexMale", "Std. Error"], "\n")
+
+cat("\nThree-way Interaction:\n")
+cat("---------------------\n")
+cat("H2 copies * Age * Sex: ", ptau_h2_sex_results["H2_copies:age:SexMale", "Estimate"], 
+    "p-val:", ptau_h2_sex_results["H2_copies:age:SexMale", "Pr(>|t|)"],
+    "SE:", ptau_h2_sex_results["H2_copies:age:SexMale", "Std. Error"], "\n")
+```
