@@ -75,9 +75,13 @@ prs <- read.table(file.path(project_root, 'data', 'a4', 'prs_scores', 'gm', 'prs
 prs$GM_ZSCORE <- (prs$GM_SCORE - mean(prs$GM_SCORE, na.rm = TRUE)) / sd(prs$GM_SCORE, na.rm = TRUE)
 prs <- prs[!(prs$GM_ZSCORE > 5 | prs$GM_ZSCORE < -5), ]
 
+# MAPT expression
+mapt_transcript <- read.csv(file.path(project_root, 'data', 'a4', 'mapt.csv'))
+
 # Data merge
 data_a4 <- merge(data_a4, mapt, by.x = "BID", by.y = "ID", all = TRUE)
 data_a4 <- merge(data_a4, prs, by.x = "BID", by.y = "BID", all = TRUE)
+data_a4 <- merge(data_a4, mapt_transcript, by.x = "BID", by.y = "BID", all = TRUE)
 
 # Define the H2 column name
 #H2_col = 'rs8070723'
@@ -220,6 +224,47 @@ ptau217_h2_plot <- plot_model(ptau_h2, type = c('pred'), terms = c('age', 'H2_co
 ptau217_h2_plot
 ```
 
+## Sex differences
+
+```{r}
+# Create summary with proportions
+sex_h2_summary <- data_a4 %>%
+  filter(!is.na(H2_copies) & !is.na(Sex)) %>%
+  group_by(Sex, H2_copies) %>%
+  summarise(count = n(), .groups = 'drop') %>%
+  group_by(Sex) %>%
+  mutate(proportion = count / sum(count))
+
+# Print the table
+cat("Proportions by Sex and H2 copies:\n")
+print(sex_h2_summary)
+
+# Chi-square test for independence
+cat("\nChi-square test (H2 copies distribution by Sex):\n")
+contingency_table <- table(data_a4$Sex, data_a4$H2_copies)
+print(contingency_table)
+chisq_result <- chisq.test(contingency_table)
+cat("Chi-square p-value:", chisq_result$p.value, "\n")
+
+# Chi-square test for 0 vs ≥1 copy by Sex
+cat("\nChi-square test (0 vs ≥1 H2 copy by Sex):\n")
+contingency_table_binary <- table(data_a4$Sex, data_a4$H2_group)
+print(contingency_table_binary)
+chisq_result_binary <- chisq.test(contingency_table_binary)
+cat("Chi-square p-value:", chisq_result_binary$p.value, "\n")
+
+# Bar plot
+ggplot(sex_h2_summary, aes(x = factor(H2_copies), y = proportion, fill = Sex)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  scale_fill_manual(values = c("Male" = "#4285F4", "Female" = "#EA4335")) +
+  labs(title = "Proportion of H2 Copies by Sex",
+       x = "H2 Copies",
+       y = "Proportion",
+       fill = "Sex") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::percent)
+```
+
 ```{r}
 # H2 model with sex interaction
 ptau_h2_sex <- glm(pTau217 ~ H2_copies*age*Sex, data = data_a4)
@@ -258,4 +303,88 @@ cat("---------------------\n")
 cat("H2 copies * Age * Sex: ", ptau_h2_sex_results["H2_copies:age:SexMale", "Estimate"], 
     "p-val:", ptau_h2_sex_results["H2_copies:age:SexMale", "Pr(>|t|)"],
     "SE:", ptau_h2_sex_results["H2_copies:age:SexMale", "Std. Error"], "\n")
+```
+
+## Transcriptomics
+
+```{r}
+# Count subjects with mapt by H2 copies
+cat("Subjects with mapt expression by H2 copies:\n")
+print(table(data_a4$H2_copies[!is.na(data_a4$mapt)]))
+
+# Kruskal-Wallis test
+kruskal_result <- kruskal.test(mapt ~ H2_copies, data = data_a4, na.action = na.omit)
+cat("\nKruskal-Wallis p-value:", kruskal_result$p.value, "\n")
+
+# Pairwise comparisons
+cat("\nPairwise p-values:\n")
+pairwise_result <- pairwise.wilcox.test(data_a4$mapt, 
+                                        data_a4$H2_copies,
+                                        p.adjust.method = "bonferroni",
+                                        na.action = na.omit)
+print(pairwise_result$p.value)
+
+# Boxplot
+ggplot(data_a4 %>% filter(!is.na(H2_copies) & !is.na(mapt)), 
+       aes(x = factor(H2_copies), y = mapt)) +
+  geom_boxplot(fill = "lightblue", outlier.color = "red") +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 1) +
+  labs(title = "MAPT Expression by H2 Copies",
+       x = "H2 Copies",
+       y = "MAPT Expression") +
+  theme_minimal()
+```
+
+```{r}
+# Calculate Pearson correlation
+cor_data <- data_a4 %>% filter(!is.na(pTau217) & !is.na(mapt))
+pearson_cor <- cor.test(cor_data$pTau217, cor_data$mapt, method = "pearson")
+cat("Pearson correlation:", pearson_cor$estimate, "\n")
+cat("Correlation p-value:", pearson_cor$p.value, "\n\n")
+
+# Scatter plot with correlation
+ggplot(cor_data, aes(x = mapt, y = pTau217)) +
+  geom_point(alpha = 0.5) +
+  geom_smooth(method = "lm", color = "blue", se = TRUE) +
+  labs(title = paste0("pTau217 vs MAPT Expression (r = ", 
+                     round(pearson_cor$estimate, 3), 
+                     ", p = ", 
+                     format.pval(pearson_cor$p.value, digits = 3), ")"),
+       x = "MAPT Expression",
+       y = "pTau217") +
+  theme_minimal()
+
+# Linear model with age interaction
+ptau_mapt <- glm(pTau217 ~ mapt*age, data = data_a4)
+ptau_mapt_standardized <- standardize(ptau_mapt, standardize = "all")
+ptau_mapt_results <- summary(ptau_mapt_standardized)$coefficients
+
+cat("\npTau217 ~ MAPT * Age Model\n")
+cat("==========================\n")
+cat("Standardized Effect MAPT * Age: ", ptau_mapt_results["mapt:age", "Estimate"], 
+    "p-val:", ptau_mapt_results["mapt:age", "Pr(>|t|)"],
+    "SE:", ptau_mapt_results["mapt:age", "Std. Error"], "\n")
+cat("Standardized Effect MAPT: ", ptau_mapt_results["mapt", "Estimate"], 
+    "p-val:", ptau_mapt_results["mapt", "Pr(>|t|)"],
+    "SE:", ptau_mapt_results["mapt", "Std. Error"], "\n")
+cat("Standardized Effect Age: ", ptau_mapt_results["age", "Estimate"], 
+    "p-val:", ptau_mapt_results["age", "Pr(>|t|)"],
+    "SE:", ptau_mapt_results["age", "Std. Error"], "\n")
+
+# Plot MAPT model
+# Define quartiles or specific values of MAPT expression to show
+ptau217_mapt_plot <- plot_model(ptau_mapt, type = c('pred'), terms = c('age', 'mapt [meansd]'), show.values = TRUE) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(65, 90)) +
+  scale_y_continuous(limits = c(0.1, 0.7)) +
+  labs(
+    title = "",
+    y = "pTau217",
+    x = "Age",
+    color = "MAPT Expression"
+  ) +
+  scale_color_manual(values = c("#009a37", "#0081ff", "#e53f2a")) +
+  scale_fill_manual(values = c("#009a37", "#0081ff", "#e53f2a"))
+
+ptau217_mapt_plot
 ```
