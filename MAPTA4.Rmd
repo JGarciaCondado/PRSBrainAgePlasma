@@ -15,7 +15,7 @@ knit: (
 
 ```{r, include = FALSE, warning = FALSE, message = FALSE}
 library(ggplot2); library(ggpubr); library(dplyr);library(sjPlot);library(gtsummary); library(flextable);library(ppcor);library(gridExtra);library(effsize);library(MatchIt);library(tidyr);
-library(readxl);library(effectsize)
+library(readxl);library(effectsize);library(ggeffects);library(nlme)
 
 # Theme for downloading figures
 theme_all <- theme(
@@ -75,21 +75,37 @@ prs <- read.table(file.path(project_root, 'data', 'a4', 'prs_scores', 'gm', 'prs
 prs$GM_ZSCORE <- (prs$GM_SCORE - mean(prs$GM_SCORE, na.rm = TRUE)) / sd(prs$GM_SCORE, na.rm = TRUE)
 prs <- prs[!(prs$GM_ZSCORE > 5 | prs$GM_ZSCORE < -5), ]
 
+# Alternative Haplotypes
+mapt_alt <- read_excel(file.path(project_root, 'data', 'a4', 'rs1467967.xlsx'))  %>%  
+            dplyr::select(-age)
+
 # MAPT expression
 mapt_transcript <- read.csv(file.path(project_root, 'data', 'a4', 'mapt.csv'))
 
 # Data merge
 data_a4 <- merge(data_a4, mapt, by.x = "BID", by.y = "ID", all = TRUE)
+data_a4 <- merge(data_a4, mapt_alt, by.x = "BID", by.y = "ID", all = TRUE)
 data_a4 <- merge(data_a4, prs, by.x = "BID", by.y = "BID", all = TRUE)
 data_a4 <- merge(data_a4, mapt_transcript, by.x = "BID", by.y = "BID", all = TRUE)
 
-# Define the H2 column name
-#H2_col = 'rs8070723'
-H2_col = 'rs1052553'
+# Define the H2 column name (choose one)
+H2_col <- 'rs8070723'  # Option 1
+#H2_col <- 'rs1052553'  # Option 2
+#H2_col <- 'rs1467967'  # Option 3
 
-# Create H2 copy number variable by summing the two allele columns
-data_a4 <- data_a4 %>%
-  mutate(H2_copies = .data[[paste0(H2_col, '_1')]] + .data[[paste0(H2_col, '_2')]])
+# Create H2 copy number variable
+if (H2_col %in% c('rs8070723', 'rs1052553')) {
+  # Sum the two allele columns
+  data_a4 <- data_a4 %>%
+    mutate(H2_copies = .data[[paste0(H2_col, '_1')]] + .data[[paste0(H2_col, '_2')]])
+} else if (H2_col == 'rs1467967') {
+  # Use the column directly
+  data_a4 <- data_a4 %>%
+    mutate(H2_copies = .data[[H2_col]])
+} else {
+  stop("Unknown H2 column specified")
+}
+
 # Create grouping: at least one H2 copy vs no H2 copy
 data_a4 <- data_a4 %>%
   mutate(H2_group = ifelse(H2_copies >= 1, "≥1 H2 copy", "0 H2 copies"))
@@ -388,3 +404,150 @@ ptau217_mapt_plot <- plot_model(ptau_mapt, type = c('pred'), terms = c('age', 'm
 
 ptau217_mapt_plot
 ```
+
+## Longitudinal Cognitive Changes
+
+```{r}
+# Load A4 data
+data_a4_long <- read.csv(file.path(project_root, 'data', 'a4', 'longitudinal.csv')) %>%
+  mutate_at(vars(sex, e4_carrier, ab_status, cohort, LMSTORY), factor) %>%
+  # Rename ID to BID
+  rename(BID = ID) %>%
+  # Remove "_a4" from BID values
+  mutate(BID = gsub("_a4$", "", BID)) %>%
+  # Add H2_copies column from data_a4 by matching on BID
+  left_join(data_a4 %>% dplyr::select(BID, H2_copies, pTau217), by = "BID")
+```
+
+Cross_sectional:
+
+```{r}
+# Filter for baseline only
+baseline_data <- data_a4_long %>%
+  filter(VISCODE == 1)
+
+# Count subjects with PACC by H2 copies at baseline
+cat("Subjects with PACC by H2 copies at baseline:\n")
+print(table(baseline_data$H2_copies[!is.na(baseline_data$PACC)]))
+
+# Kruskal-Wallis test
+kruskal_result <- kruskal.test(PACC ~ H2_copies, data = baseline_data, na.action = na.omit)
+cat("\nKruskal-Wallis p-value:", kruskal_result$p.value, "\n")
+
+# Pairwise comparisons
+cat("\nPairwise p-values:\n")
+pairwise_result <- pairwise.wilcox.test(baseline_data$PACC, 
+                                        baseline_data$H2_copies,
+                                        p.adjust.method = "bonferroni",
+                                        na.action = na.omit)
+print(pairwise_result$p.value)
+
+# Boxplot
+ggplot(baseline_data %>% filter(!is.na(H2_copies) & !is.na(PACC)), 
+       aes(x = factor(H2_copies), y = PACC)) +
+  geom_boxplot(fill = "lightblue", outlier.color = "red") +
+  geom_jitter(width = 0.2, alpha = 0.3, size = 1) +
+  labs(title = "PACC Scores by H2 Copies (Baseline)",
+       x = "H2 Copies",
+       y = "PACC") +
+  theme_minimal()
+```
+Longitudinal:
+
+```{r}
+# Create linear mixed effects model for A4 
+lme_a4 <- lme(PACC ~ I(time_mri^2)
+              + time_mri*H2_copies
+              + Cumulative_Dose_Scaled
+              + time_mri*cohort
+              + LMSTORY, 
+              data = data_a4_long, 
+              random = ~time_mri|BID, 
+              na.action = 'na.omit', 
+              method = c('ML'),
+              control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
+summary(lme_a4)
+```
+
+```{r}
+# Plot model
+a4_p <- plot(ggpredict(lme_a4, terms = c("time_mri [all]", "H2_copies"))) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(0, 10)) + 
+  scale_y_continuous(limits = c(-2, 1)) +
+  labs(
+    title = "",
+    y = "PACC",
+    x = "Time from MRI (years)",
+    color = "H2 Copies"
+  )
+
+a4_p
+```
+
+Longitudinal interaction with pTau217:
+
+```{r}
+# Create linear mixed effects model for A4 
+lme_a4_ptau <- lme(PACC ~ I(time_mri^2)
+              + time_mri*H2_copies*pTau217
+              + Cumulative_Dose_Scaled
+              + time_mri*cohort
+              + LMSTORY, 
+              data = data_a4_long, 
+              random = ~time_mri|BID, 
+              na.action = 'na.omit', 
+              method = c('ML'),
+              control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
+summary(lme_a4_ptau)
+```
+
+```{r}
+# Plot model
+a4_ptau <- plot(ggpredict(lme_a4_ptau, terms = c("time_mri [all]", "H2_copies", "pTau217"))) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(0, 10)) + 
+  scale_y_continuous(limits = c(-2.5, 1)) +
+  labs(
+    title = "",
+    y = "PACC",
+    x = "Time from MRI (years)",
+    color = "H2 Copies"
+  )
+
+a4_ptau
+```
+
+Sex ptau217 interactions:
+
+```{r}
+# Create linear mixed effects model for A4 
+lme_a4_ptau_sex <- lme(PACC ~ I(time_mri^2)
+              + time_mri*H2_copies*pTau217*sex
+              + Cumulative_Dose_Scaled
+              + time_mri*cohort
+              + LMSTORY, 
+              data = data_a4_long, 
+              random = ~time_mri|BID, 
+              na.action = 'na.omit', 
+              method = c('ML'),
+              control = lmeControl(opt = "optim", maxIter = 500, msMaxIter = 1000));
+summary(lme_a4_ptau_sex)
+```
+
+```{r}
+# Plot model
+a4_ptau_sex <- plot(ggpredict(lme_a4_ptau_sex, terms = c("time_mri [all]", "H2_copies", "pTau217", "sex"))) +
+  theme_minimal() +
+  scale_x_continuous(limits = c(0, 10)) + 
+  scale_y_continuous(limits = c(-3, 1.5)) +
+  labs(
+    title = "",
+    y = "PACC",
+    x = "Time from MRI (years)",
+    color = "H2 Copies"
+  )
+
+a4_ptau_sex
+```
+
